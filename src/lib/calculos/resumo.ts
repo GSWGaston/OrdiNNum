@@ -41,7 +41,7 @@ export function resumoDoMes(lancamentos: Lancamento[], previstos: { valorCentavo
     despesas,
     saldoMes: receitas - despesas,
     previstoReceitas: previstos.filter((p) => p.valorCentavos > 0).reduce((s, p) => s + p.valorCentavos, 0),
-    previstoDespesas: -previstos.filter((p) => p.valorCentavos < 0).reduce((s, p) => s + p.valorCentavos, 0),
+    previstoDespesas: 0 - previstos.filter((p) => p.valorCentavos < 0).reduce((s, p) => s + p.valorCentavos, 0),
     saldoFimDoMes: saldoAtual + futuros + somaPrevistos,
   };
 }
