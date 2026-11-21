@@ -278,7 +278,7 @@ export default async function Contas() {
                   {aPagar && (
                     <div>
                       <dt className="text-zinc-600 dark:text-zinc-400">
-                        {aPagar.fechamento ? `Fatura que fecha ${formatarData(aPagar.fechamento)}` : "Fatura aberta (informada pelo banco)"}
+                        {aPagar.fechamento ? `Fatura que fecha ${formatarData(aPagar.fechamento)}` : `Fatura de ${mesPorExtenso(aPagar.vencimento)}`}
                       </dt>
                       <dd className="tabular font-semibold">{formatarReais(aPagar.aberto)}</dd>
                     </div>
