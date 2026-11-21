@@ -34,10 +34,18 @@ export type Fatura = { fechamento: string | null; vencimento: string; total: num
  * Cartão do banco (tem disponível informado): fatura aberta, vencimento e dívida vêm do banco. O histórico não serve,
  * porque o Open Finance não manda os pagamentos de fatura do lado do cartão: tudo pareceria em aberto.
  */
-export function resumoDoCartao(c: CartaoBase, lancamentos: { data: string; valorCentavos: number }[]) {
+/** Próxima data (a partir de `hoje`, inclusive) com o dia `dia` do mês, limitado ao último dia. */
+export function proximoDia(hoje: string, dia: number) {
+  const noMes = diaNoMes(hoje.slice(0, 7), dia);
+  return noMes >= hoje ? noMes : diaNoMes(somarMesesAoMes(hoje.slice(0, 7), 1), dia);
+}
+
+export function resumoDoCartao(c: CartaoBase, lancamentos: { data: string; valorCentavos: number }[], hoje?: string) {
   if (c.limiteDisponivelCentavos !== null) {
     const aberto = c.faturaAbertaCentavos ?? 0;
-    const faturas: Fatura[] = aberto > 0 && c.faturaVencimento ? [{ fechamento: null, vencimento: c.faturaVencimento, total: aberto, aberto }] : [];
+    // nem todo banco manda o vencimento junto com o valor: sem ele, usa o dia de vencimento do cartão
+    const vencimento = c.faturaVencimento ?? (hoje ? proximoDia(hoje, c.diaVencimento) : null);
+    const faturas: Fatura[] = aberto > 0 && vencimento ? [{ fechamento: null, vencimento, total: aberto, aberto }] : [];
     const devido = c.limiteTotalCentavos - c.limiteDisponivelCentavos;
     const usoPct = c.limiteTotalCentavos > 0 ? (devido / c.limiteTotalCentavos) * 100 : 0;
     return { faturas, devido, disponivel: c.limiteDisponivelCentavos, usoPct };

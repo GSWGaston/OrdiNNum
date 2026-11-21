@@ -2,6 +2,7 @@ import { and, asc, eq, isNotNull } from "drizzle-orm";
 import type { Db } from "@/db";
 import { cartao, transacao } from "@/db/schema";
 import { resumoDoCartao } from "@/lib/calculos/cartao";
+import { hoje } from "@/lib/calculos/datas";
 import { cartaoDoUsuario, contaDoUsuario } from "./comum";
 
 export type DadosCartao = {
@@ -21,7 +22,8 @@ export async function listarCartoes(db: Db, uid: string) {
       .from(transacao)
       .where(and(eq(transacao.usuarioId, uid), isNotNull(transacao.cartaoId))),
   ]);
-  return cartoes.map((c) => ({ ...c, ...resumoDoCartao(c, lancs.filter((l) => l.cartaoId === c.id)) }));
+  const dia = hoje();
+  return cartoes.map((c) => ({ ...c, ...resumoDoCartao(c, lancs.filter((l) => l.cartaoId === c.id), dia) }));
 }
 
 export const criarCartao = (db: Db, uid: string, d: DadosCartao) => db.insert(cartao).values({ ...d, usuarioId: uid });

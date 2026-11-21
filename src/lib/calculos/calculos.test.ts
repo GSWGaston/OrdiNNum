@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hoje, limitesDoMes, ocorrenciasAte, proximaData, somarMeses, somarMesesAoMes } from "./datas";
-import { faturaDaCompra, resumoDoCartao } from "./cartao";
+import { faturaDaCompra, proximoDia, resumoDoCartao } from "./cartao";
 import { consolidarCredito, FAIXAS_PADRAO, faixaDeUso, gastoNoCreditoNoMes, parcelasFuturasPorMes } from "./credito";
 import { mesesRestantes, resumoObjetivo } from "./objetivos";
 import { progressoOrcamentos } from "./orcamento";
@@ -136,6 +136,14 @@ describe("cartão", () => {
       disponivel: 262990,
     });
     expect(resumoDoCartao({ ...banco, faturaAbertaCentavos: 0 }, compras).faturas).toEqual([]);
+    // banco mandou o valor sem o vencimento: usa o dia de vencimento do cartão (10) a partir de hoje
+    expect(resumoDoCartao({ ...banco, faturaVencimento: null }, compras, "2026-11-21").faturas).toEqual([
+      { fechamento: null, vencimento: "2026-12-10", total: 35010, aberto: 35010 },
+    ]);
+    expect(proximoDia("2026-11-05", 10)).toBe("2026-11-10");
+    expect(proximoDia("2026-11-10", 10)).toBe("2026-11-10");
+    expect(proximoDia("2027-01-31", 31)).toBe("2027-01-31");
+    expect(proximoDia("2027-02-01", 31)).toBe("2027-02-28");
   });
   it("cartão manual: pagamento a mais vira crédito", () => {
     const r = resumoDoCartao(c, [{ data: "2026-11-01", valorCentavos: -1000 }, { data: "2026-11-05", valorCentavos: 1500 }]);
