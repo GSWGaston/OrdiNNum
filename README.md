@@ -39,13 +39,15 @@ Primeira vez com Playwright: `npx playwright install chromium`.
 
 Precisa das suas contas; nada disso foi feito ainda.
 
-1. **Banco (Neon):** crie um projeto em neon.tech, região `sa-east-1` (São Paulo). Copie a *connection string*
-   com `sslmode=require`.
-2. **Migrações:** localmente, `DATABASE_URL="<string do Neon>" npm run db:migrate`.
-3. **GitHub:** suba este repositório (privado).
-4. **Vercel:** importe o repositório e configure as variáveis `AUTH_SECRET` (gere um novo, diferente do local) e
-   `DATABASE_URL`. Deploy. O HTTPS vem pronto; HSTS e CSP já estão no código.
-5. **Teste:** cadastre-se no endereço publicado e lance algo.
+1. **Banco (Neon):** crie conta em neon.tech e um projeto na região **AWS São Paulo (sa-east-1)**. Em
+   *Connection string*, ligue **Pooled connection** e copie (termina com `?sslmode=require`).
+2. **GitHub:** crie um repositório **privado** vazio (sem README) e me passe o endereço; eu envio o código.
+3. **Vercel:** entre com o GitHub em vercel.com → *Add New → Project* → importe o repositório. Em
+   *Environment Variables* adicione:
+   - `DATABASE_URL` = string do Neon
+   - `AUTH_SECRET` = gere com `npx auth secret` (um novo, não o do seu `.env.local`)
+   Clique *Deploy*. O script `vercel-build` aplica as migrações no Neon antes de cada build.
+4. **Teste:** abra o endereço `.vercel.app`, cadastre-se e lance algo. Os dados de exemplo não vão para produção.
 
 **Backups (spec: diários, criptografados, com teste de restauração):**
 - O Neon guarda histórico para restauração a qualquer ponto no tempo (o prazo depende do plano) e criptografa em
