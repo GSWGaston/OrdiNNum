@@ -43,7 +43,11 @@ export async function resumoCredito(db: Db, uid: string, mes: string) {
   return {
     cartoes,
     faixas,
-    consolidado: consolidarCredito(cartoes, faixas),
+    // com limite pessoal, o uso é medido sobre ele (é o que a pessoa se permite gastar)
+    consolidado: consolidarCredito(
+      cartoes.map((c) => ({ id: c.id, limiteTotalCentavos: c.limitePessoalCentavos ?? c.limiteTotalCentavos, disponivel: c.disponivel })),
+      faixas,
+    ),
     gastoNoMes: gastoNoCreditoNoMes(lancs, mes),
     parcelasFuturas: parcelas,
     totalParcelasFuturas: parcelas.reduce((s, p) => s + p.total, 0),

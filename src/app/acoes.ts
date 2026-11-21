@@ -374,6 +374,11 @@ const cartaoForm = z.object({
   nome: texto(80).min(1, "Informe o nome do cartão."),
   bandeira: texto(30).min(1, "Escolha a bandeira."),
   limite: valor,
+  limitePessoal: z
+    .string()
+    .optional()
+    .transform((s) => (s?.trim() ? lerReais(s) : null))
+    .pipe(z.number({ error: "Limite pessoal inválido." }).int().positive("Limite pessoal precisa ser maior que zero.").max(1e11).nullable()),
   diaFechamento: diaDoMes,
   diaVencimento: diaDoMes,
 });
@@ -381,8 +386,8 @@ const cartaoForm = z.object({
 export async function salvarCartao(_: Estado, fd: FormData) {
   const p = ler(cartaoForm, fd);
   if (!p.success) return { erro: msg(p.error) };
-  const { id: cid, limite, ...d } = p.data;
-  const dados = { ...d, limiteTotalCentavos: limite };
+  const { id: cid, limite, limitePessoal, ...d } = p.data;
+  const dados = { ...d, limiteTotalCentavos: limite, limitePessoalCentavos: limitePessoal };
   return rodar((uid) => (cid ? atualizarCartao(db, uid, cid, dados) : criarCartao(db, uid, dados)), "Cartão salvo.");
 }
 

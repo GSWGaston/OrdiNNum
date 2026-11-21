@@ -193,7 +193,7 @@ export const cartao = pgTable(
     diaVencimento: integer().notNull(),
     // cartão do banco: fatura aberta e vencimento informados pelo banco (Open Finance não manda os pagamentos no cartão)
     faturaAbertaCentavos: centavos(),
-    // limite que o usuário informa à mão (ex.: limita o uso no app do banco); vale no lugar do limite do banco
+    // limite pessoal (opcional): quanto o usuário se permite usar (ex.: limitou no app do banco). Não vem do banco.
     limiteUsuarioCentavos: centavos(),
     faturaVencimento: date(),
     conexaoId: uuid().references(() => conexaoBanco.id, { onDelete: "set null" }),

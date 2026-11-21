@@ -11,6 +11,7 @@ export type DadosCartao = {
   limiteTotalCentavos: number;
   diaFechamento: number;
   diaVencimento: number;
+  limitePessoalCentavos?: number | null;
 };
 
 /** Cartões com faturas, devido e limite disponível calculados. */
@@ -18,28 +19,38 @@ export async function listarCartoes(db: Db, uid: string) {
   const [cartoes, lancs] = await Promise.all([
     db.select().from(cartao).where(eq(cartao.usuarioId, uid)).orderBy(asc(cartao.nome)),
     db
-      .select({ cartaoId: transacao.cartaoId, data: transacao.data, valorCentavos: transacao.valorCentavos })
+      .select({
+        cartaoId: transacao.cartaoId,
+        data: transacao.data,
+        valorCentavos: transacao.valorCentavos,
+        grupoParcelas: transacao.grupoParcelas,
+        transferenciaId: transacao.transferenciaId,
+        descricao: transacao.descricao,
+        parcelaAtual: transacao.parcelaAtual,
+        parcelasTotal: transacao.parcelasTotal,
+      })
       .from(transacao)
       .where(and(eq(transacao.usuarioId, uid), isNotNull(transacao.cartaoId))),
   ]);
   const dia = hoje();
   return cartoes.map((c) => {
-    // limite informado pelo usuário vence o do banco (ex.: Nubank com uso limitado no app: o disponível vem sobre ele)
-    const efetivo = { ...c, limiteTotalCentavos: c.limiteUsuarioCentavos ?? c.limiteTotalCentavos };
-    return { ...efetivo, limiteDoBancoCentavos: c.limiteTotalCentavos, ...resumoDoCartao(efetivo, lancs.filter((l) => l.cartaoId === c.id), dia) };
+    const comPessoal = { ...c, limitePessoalCentavos: c.limiteUsuarioCentavos };
+    return { ...comPessoal, ...resumoDoCartao(comPessoal, lancs.filter((l) => l.cartaoId === c.id), dia) };
   });
 }
 
-export const criarCartao = (db: Db, uid: string, d: DadosCartao) => db.insert(cartao).values({ ...d, usuarioId: uid });
+const colunas = ({ limitePessoalCentavos, ...d }: DadosCartao) => ({ ...d, limiteUsuarioCentavos: limitePessoalCentavos ?? null });
 
-/** Cartão manual: tudo. Cartão do banco: o limite digitado vira o "limite que você usa" (a sincronização não mexe). */
+export const criarCartao = (db: Db, uid: string, d: DadosCartao) => db.insert(cartao).values({ ...colunas(d), usuarioId: uid });
+
+/** Cartão manual: tudo. Cartão do banco: o limite do cartão vem do banco; o resto (inclusive o limite pessoal) é seu. */
 export async function atualizarCartao(db: Db, uid: string, id: string, d: DadosCartao) {
   const dono = and(eq(cartao.id, id), eq(cartao.usuarioId, uid));
-  await db.update(cartao).set(d).where(and(dono, isNull(cartao.conexaoId)));
-  const { limiteTotalCentavos, ...resto } = d;
+  await db.update(cartao).set(colunas(d)).where(and(dono, isNull(cartao.conexaoId)));
+  const { nome, bandeira, diaFechamento, diaVencimento, limiteUsuarioCentavos } = colunas(d);
   await db
     .update(cartao)
-    .set({ ...resto, limiteUsuarioCentavos: limiteTotalCentavos })
+    .set({ nome, bandeira, diaFechamento, diaVencimento, limiteUsuarioCentavos })
     .where(and(dono, isNotNull(cartao.conexaoId)));
 }
 

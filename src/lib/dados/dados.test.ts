@@ -529,9 +529,10 @@ describe("cartão do banco com limite informado pelo usuário", () => {
     let [c] = await listarCartoes(db, uid);
     expect(Math.round(c!.usoPct)).toBe(98); // sem o ajuste: parece quase todo usado
 
-    await atualizarCartao(db, uid, c!.id, { nome: c!.nome, bandeira: c!.bandeira, limiteTotalCentavos: 21000, diaFechamento: 3, diaVencimento: 10 });
+    // o usuário informa o limite pessoal; o limite do cartão (do banco) não muda
+    await atualizarCartao(db, uid, c!.id, { nome: c!.nome, bandeira: c!.bandeira, limiteTotalCentavos: 1, limitePessoalCentavos: 21000, diaFechamento: 3, diaVencimento: 10 });
     await sincronizarConexao(db, uid, conexaoId, banco, new Date("2026-11-21T16:00:00Z"));
     [c] = await listarCartoes(db, uid);
-    expect(c).toMatchObject({ limiteTotalCentavos: 21000, limiteDoBancoCentavos: 565000, devido: 10659, disponivel: 10341 });
+    expect(c).toMatchObject({ limiteTotalCentavos: 565000, limitePessoalCentavos: 21000, devido: 10659, disponivel: 10341, base: "pessoal" });
   });
 });

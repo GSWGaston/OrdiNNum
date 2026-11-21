@@ -126,31 +126,30 @@ describe("cartão", () => {
     expect(r.disponivel).toBe(485000);
     expect(r.usoPct).toBe(3);
   });
-  it("cartão do banco: fatura, vencimento e dívida vêm do banco, não do histórico", () => {
-    // caso real (Inter via Open Finance): compras de 12 meses chegam, os pagamentos da fatura não
-    const compras = ["2026-01-05", "2026-02-05", "2026-03-05"].map((data) => ({ data, valorCentavos: -50000 }));
-    const banco = { ...c, limiteTotalCentavos: 298000, limiteDisponivelCentavos: 262990, faturaAbertaCentavos: 35010, faturaVencimento: "2026-12-07" };
-    expect(resumoDoCartao(banco, compras)).toMatchObject({
+  it("cartão do banco: fatura = limite usado - parcelas futuras; disponível sobre o limite real ou o pessoal", () => {
+    // Inter (caso real): limite 2.980, disponível 2.629,90 -> usado 350,10 (= fatura). O campo fatura do banco (759,18) é ignorado.
+    const compras = ["2026-01-05", "2026-02-05"].map((data) => ({ data, valorCentavos: -50000 }));
+    const inter = { ...c, diaVencimento: 7, limiteTotalCentavos: 298000, limiteDisponivelCentavos: 262990, faturaAbertaCentavos: 75918, faturaVencimento: "2026-12-07" };
+    expect(resumoDoCartao(inter, compras, "2026-11-21")).toMatchObject({
       faturas: [{ fechamento: null, vencimento: "2026-12-07", total: 35010, aberto: 35010 }],
       devido: 35010,
       disponivel: 262990,
+      base: "cartao",
     });
-    expect(resumoDoCartao({ ...banco, faturaAbertaCentavos: 0 }, compras).faturas).toEqual([]);
-    // banco mandou o valor sem o vencimento: usa o dia de vencimento do cartão (10) a partir de hoje
-    expect(resumoDoCartao({ ...banco, faturaVencimento: null }, compras, "2026-11-21").faturas).toEqual([
-      { fechamento: null, vencimento: "2026-12-10", total: 35010, aberto: 35010 },
-    ]);
-    // banco não informou a fatura (Nubank): calcula pelas compras; fatura já vencida conta como paga
-    const nubank = { ...c, diaFechamento: 3, diaVencimento: 10, limiteTotalCentavos: 565000, limiteDisponivelCentavos: 10341, faturaAbertaCentavos: 0, faturaVencimento: null };
-    const comprasNu = [
-      { data: "2026-10-20", valorCentavos: -9999 }, // fatura 10/11: já venceu
-      { data: "2026-11-04", valorCentavos: -6659 }, // fatura 10/12
-      { data: "2026-11-18", valorCentavos: -4000 }, // fatura 10/12
-      { data: "2026-11-15", valorCentavos: 5000 }, // pagamento/estorno: ignorado
-    ];
-    expect(resumoDoCartao(nubank, comprasNu, "2026-11-21").faturas).toEqual([
-      { fechamento: "2026-12-03", vencimento: "2026-12-10", total: 10659, aberto: 10659 },
-    ]);
+    // Inter com limite pessoal de 400: disponível (2.629,90) é maior que o pessoal, então veio sobre o real
+    expect(resumoDoCartao({ ...inter, limitePessoalCentavos: 40000 }, compras, "2026-11-21")).toMatchObject({ devido: 35010, disponivel: 4990, base: "cartao" });
+    // Nubank (caso real): limite 5.650, uso limitado a 210 no app, disponível 103,41 -> veio sobre o pessoal
+    const nubank = { ...c, diaVencimento: 10, limiteTotalCentavos: 565000, limiteDisponivelCentavos: 10341, faturaAbertaCentavos: 0, faturaVencimento: null, limitePessoalCentavos: 21000 };
+    expect(resumoDoCartao(nubank, [], "2026-11-21")).toMatchObject({
+      faturas: [{ fechamento: null, vencimento: "2026-12-10", total: 10659, aberto: 10659 }],
+      devido: 10659,
+      base: "pessoal",
+    });
+    expect(Math.round(resumoDoCartao(nubank, [], "2026-11-21").usoPct)).toBe(51);
+    // Mercado Pago: compra de 8x na 3ª parcela; o banco tira do limite o restante -> fatura só a parcela + outras compras
+    const parcela = (data: string, n: number) => ({ data, valorCentavos: -15664, descricao: `LOJA ${n}/8`, parcelaAtual: n, parcelasTotal: 8 });
+    const mp = { ...c, diaVencimento: 17, limiteTotalCentavos: 330000, limiteDisponivelCentavos: 330000 - 15664 * 6, faturaAbertaCentavos: 27048, faturaVencimento: "2026-12-17" };
+    expect(resumoDoCartao(mp, [parcela("2026-10-12", 2), parcela("2026-11-12", 3)], "2026-11-21").faturas[0]!.aberto).toBe(15664);
     expect(proximoDia("2026-11-05", 10)).toBe("2026-11-10");
     expect(proximoDia("2026-11-10", 10)).toBe("2026-11-10");
     expect(proximoDia("2027-01-31", 31)).toBe("2027-01-31");

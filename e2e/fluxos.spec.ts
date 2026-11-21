@@ -74,7 +74,7 @@ test("cartão: compra é despesa no dia e não mexe no saldo da conta", async ({
   await criarConta(page, "Conta C", "500,00");
   const form = page.locator("section", { has: page.getByRole("heading", { name: "Adicionar cartão de crédito" }) });
   await form.getByLabel("Nome").fill("Cartão Teste");
-  await form.getByLabel("Limite total (R$)").fill("2.000");
+  await form.getByLabel("Limite do cartão (R$)").fill("2.000");
   await form.getByLabel("Dia do fechamento").fill("3");
   await form.getByLabel("Dia do vencimento").fill("10");
   await form.getByRole("button", { name: "Adicionar cartão" }).click();

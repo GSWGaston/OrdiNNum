@@ -1,10 +1,10 @@
-import { and, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, lte, sum } from "drizzle-orm";
 import type { Db } from "@/db";
-import { cartao, metaMensal, transacao } from "@/db/schema";
-import { parcelasFuturasPorMes } from "@/lib/calculos/credito";
+import { metaMensal, transacao } from "@/db/schema";
 import { calcularGastoDiario, type Meta } from "@/lib/calculos/gastoDiario";
 import { limitesDoMes } from "@/lib/calculos/datas";
 import { previstosAte } from "@/lib/calculos/resumo";
+import { listarCartoes } from "./cartoes";
 import { listarContas } from "./contas";
 import { reservadoEmObjetivos } from "./objetivos";
 import { listarRecorrencias } from "./recorrencias";
@@ -30,35 +30,22 @@ export async function metaVigente(db: Db, uid: string, mes: string) {
 /**
  * Quanto se deve nos cartões até o fim do mês (cartão com crédito sobrando não abate o de outro).
  * Manual: compras - pagamentos até `ate` (parcelas de meses seguintes têm data futura e ficam de fora).
- * Do banco: limite usado informado pelo banco MENOS as parcelas dos meses seguintes. O banco reduz o limite pelo
- * total da compra parcelada, mas no mês só pesa a parcela. (O histórico não serve: não traz os pagamentos de fatura.)
+ * Do banco: a fatura do mês calculada em resumoDoCartao (limite usado - parcelas dos próximos meses).
  */
 async function dividaCartoesAte(db: Db, uid: string, ate: string) {
-  const [cartoes, lancs] = await Promise.all([
+  const [cartoes, somas] = await Promise.all([
+    listarCartoes(db, uid),
     db
-      .select({ id: cartao.id, limite: sql<number>`coalesce(${cartao.limiteUsuarioCentavos}, ${cartao.limiteTotalCentavos})`.mapWith(Number), disponivel: cartao.limiteDisponivelCentavos })
-      .from(cartao)
-      .where(eq(cartao.usuarioId, uid)),
-    db
-      .select({
-        data: transacao.data,
-        valorCentavos: transacao.valorCentavos,
-        cartaoId: transacao.cartaoId,
-        grupoParcelas: transacao.grupoParcelas,
-        transferenciaId: transacao.transferenciaId,
-        descricao: transacao.descricao,
-        parcelaAtual: transacao.parcelaAtual,
-        parcelasTotal: transacao.parcelasTotal,
-      })
+      .select({ cartaoId: transacao.cartaoId, total: sum(transacao.valorCentavos).mapWith(Number) })
       .from(transacao)
-      .where(and(eq(transacao.usuarioId, uid), isNotNull(transacao.cartaoId))),
+      .where(and(eq(transacao.usuarioId, uid), isNotNull(transacao.cartaoId), lte(transacao.data, ate)))
+      .groupBy(transacao.cartaoId),
   ]);
-  return cartoes.reduce((s, c) => {
-    const doCartao = lancs.filter((l) => l.cartaoId === c.id);
-    if (c.disponivel === null) return s + Math.max(0, -doCartao.filter((l) => l.data <= ate).reduce((t, l) => t + l.valorCentavos, 0));
-    const futuras = parcelasFuturasPorMes(doCartao, ate.slice(0, 7)).reduce((t, p) => t + p.total, 0);
-    return s + Math.max(0, c.limite - c.disponivel - futuras);
-  }, 0);
+  const soma = new Map(somas.map((p) => [p.cartaoId, p.total]));
+  return cartoes.reduce(
+    (s, c) => s + (c.limiteDisponivelCentavos !== null ? (c.faturas[0]?.aberto ?? 0) : Math.max(0, -(soma.get(c.id) ?? 0))),
+    0,
+  );
 }
 
 /** Junta os dados do mês e calcula o gasto diário de `hoje`. null se não há meta definida. */

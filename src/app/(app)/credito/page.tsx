@@ -63,7 +63,8 @@ export default async function Credito() {
               <div className="flex justify-between gap-2 text-sm">
                 <span className="font-medium">💳 {k.nome}</span>
                 <span className="tabular text-zinc-600 dark:text-zinc-400">
-                  {formatarReais(k.disponivel)} livres de {formatarReais(k.limiteTotalCentavos)}
+                  {formatarReais(k.disponivel)} livres de {formatarReais(k.limitePessoalCentavos ?? k.limiteTotalCentavos)}
+                  {k.limitePessoalCentavos ? " (pessoal)" : ""}
                 </span>
               </div>
               <MedidorCredito usoPct={p.usoPct} faixa={p.faixa} faixas={r.faixas} rotulo={k.nome} />

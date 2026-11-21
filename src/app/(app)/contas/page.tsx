@@ -50,7 +50,7 @@ type CartaoForm = {
   diaFechamento: number;
   diaVencimento: number;
   conexaoId?: string | null;
-  limiteDoBancoCentavos?: number;
+  limitePessoalCentavos?: number | null;
 };
 
 function CamposCartao({ c }: { c?: CartaoForm }) {
@@ -69,15 +69,28 @@ function CamposCartao({ c }: { c?: CartaoForm }) {
           ))}
         </select>
       </label>
-      <label className={`${rotulo} col-span-2`}>
-        {c?.conexaoId ? "Limite que você usa (R$)" : "Limite total (R$)"}
-        <input name="limite" inputMode="decimal" required defaultValue={c ? centavosParaTexto(c.limiteTotalCentavos) : ""} placeholder="0,00" className={campo} />
-        {c?.conexaoId && (
-          <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400">
-            O banco informa limite de {formatarReais(c.limiteDoBancoCentavos ?? c.limiteTotalCentavos)}. Se você limita o uso no app do banco (o
-            disponível fica menor), informe aqui o valor que usa; a sincronização não muda este campo.
-          </span>
+      <label className={rotulo}>
+        Limite do cartão (R$)
+        {c?.conexaoId ? (
+          <>
+            <input type="hidden" name="limite" value={centavosParaTexto(c.limiteTotalCentavos)} />
+            <span className={`${campo} opacity-70`}>{formatarReais(c.limiteTotalCentavos)}</span>
+            <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400">informado pelo banco</span>
+          </>
+        ) : (
+          <input name="limite" inputMode="decimal" required defaultValue={c ? centavosParaTexto(c.limiteTotalCentavos) : ""} placeholder="0,00" className={campo} />
         )}
+      </label>
+      <label className={rotulo}>
+        Limite pessoal (opcional)
+        <input
+          name="limitePessoal"
+          inputMode="decimal"
+          defaultValue={c?.limitePessoalCentavos ? centavosParaTexto(c.limitePessoalCentavos) : ""}
+          placeholder="ex.: 400,00"
+          className={campo}
+        />
+        <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400">Quanto você se permite usar, se for menos que o limite</span>
       </label>
       <label className={rotulo}>
         Dia do fechamento
@@ -254,7 +267,8 @@ export default async function Contas() {
                   <div>
                     <dt className="text-zinc-600 dark:text-zinc-400">Limite disponível</dt>
                     <dd className="tabular font-semibold">
-                      {formatarReais(c.disponivel)} de {formatarReais(c.limiteTotalCentavos)}
+                      {formatarReais(c.disponivel)} de {formatarReais(c.limitePessoalCentavos ?? c.limiteTotalCentavos)}
+                      {c.limitePessoalCentavos ? " (limite pessoal)" : ""}
                     </dd>
                   </div>
                   <div>
@@ -274,25 +288,24 @@ export default async function Contas() {
                     <dd className="tabular font-semibold">{formatarReais(depois)}</dd>
                   </div>
                 </dl>
-                {c.conexaoId && "origemFatura" in c && (
+                {c.conexaoId && (
                   <details className="mt-2 text-xs">
-                    <summary className="cursor-pointer text-zinc-600 dark:text-zinc-400">O que o banco informou (para conferir)</summary>
+                    <summary className="cursor-pointer text-zinc-600 dark:text-zinc-400">Como a fatura foi calculada</summary>
                     <dl className="tabular mt-1 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
-                      <dt>Limite total do banco</dt>
-                      <dd className="text-right">{formatarReais(c.limiteDoBancoCentavos)}</dd>
-                      <dt>Limite disponível do banco</dt>
+                      <dt>Disponível informado pelo banco</dt>
                       <dd className="text-right">{formatarReais(c.limiteDisponivelCentavos ?? 0)}</dd>
-                      <dt>Fatura aberta do banco</dt>
+                      <dt>Calculado sobre</dt>
                       <dd className="text-right">
-                        {c.faturaAbertaCentavos ? formatarReais(c.faturaAbertaCentavos) : "não informou"}
-                        {c.faturaVencimento ? ` · vence ${formatarData(c.faturaVencimento)}` : ""}
+                        {c.base === "pessoal" ? `o limite pessoal (${formatarReais(c.limitePessoalCentavos ?? 0)})` : `o limite do cartão (${formatarReais(c.limiteTotalCentavos)})`}
                       </dd>
-                      <dt>Fatura pelas compras (fecha dia {c.diaFechamento})</dt>
-                      <dd className="text-right">
-                        {c.faturaPelasCompras ? `${formatarReais(c.faturaPelasCompras.aberto)} · vence ${formatarData(c.faturaPelasCompras.vencimento)}` : "nenhuma compra"}
-                      </dd>
-                      <dt>O app está usando</dt>
-                      <dd className="text-right">{c.origemFatura === "banco" ? "a fatura do banco" : "a fatura pelas compras"}</dd>
+                      <dt>Usado</dt>
+                      <dd className="text-right">{formatarReais(c.devido)}</dd>
+                      <dt>− Parcelas dos próximos meses</dt>
+                      <dd className="text-right">{formatarReais(c.parcelasFuturas)}</dd>
+                      <dt className="font-semibold">= Fatura do mês</dt>
+                      <dd className="text-right font-semibold">{formatarReais(c.faturas[0]?.aberto ?? 0)}</dd>
+                      <dt className="text-zinc-500">Campo “fatura” do banco (não usado)</dt>
+                      <dd className="text-right text-zinc-500">{c.faturaAbertaCentavos ? formatarReais(c.faturaAbertaCentavos) : "—"}</dd>
                     </dl>
                   </details>
                 )}
