@@ -516,3 +516,22 @@ describe("Open Finance: sincronização", () => {
     expect(await listarRegras(db, b.uid)).toEqual([]);
   });
 });
+
+describe("cartão do banco com limite informado pelo usuário", () => {
+  it("vale no lugar do limite do banco e a sincronização não sobrescreve (caso Nubank com uso limitado)", async () => {
+    process.env.ENCRYPTION_KEY = "chave-de-teste";
+    const uid = await criarUsuario(db, { nome: "nu", email: "nu-limite@exemplo.test", senhaHash: "x" });
+    const banco = new FakeProvider(dadosExemplo("2026-11-21"));
+    // banco informa limite 5.650 e disponível 103,41 (que é sobre o limite de 210 ajustado no app do banco)
+    banco.dados.contas[1] = { ...banco.dados.contas[1]!, tipo: "cartao", limiteTotalCentavos: 565000, limiteDisponivelCentavos: 10341 } as (typeof banco.dados.contas)[number];
+    const conexaoId = await criarConexao(db, uid, "fake", "item-nu");
+    await sincronizarConexao(db, uid, conexaoId, banco, new Date("2026-11-21T15:00:00Z"));
+    let [c] = await listarCartoes(db, uid);
+    expect(Math.round(c!.usoPct)).toBe(98); // sem o ajuste: parece quase todo usado
+
+    await atualizarCartao(db, uid, c!.id, { nome: c!.nome, bandeira: c!.bandeira, limiteTotalCentavos: 21000, diaFechamento: 3, diaVencimento: 10 });
+    await sincronizarConexao(db, uid, conexaoId, banco, new Date("2026-11-21T16:00:00Z"));
+    [c] = await listarCartoes(db, uid);
+    expect(c).toMatchObject({ limiteTotalCentavos: 21000, limiteDoBancoCentavos: 565000, devido: 10659, disponivel: 10341 });
+  });
+});

@@ -78,6 +78,13 @@
       "when": 1795292364082,
       "tag": "0010_fatura_banco",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795293952778,
+      "tag": "0011_limite_usuario",
+      "breakpoints": true
     }
   ]
 }

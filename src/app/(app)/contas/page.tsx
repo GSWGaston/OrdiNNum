@@ -42,7 +42,16 @@ function CamposConta({ c }: { c?: { id: string; nome: string; tipo: keyof typeof
 
 const BANDEIRAS = ["Visa", "Mastercard", "Elo", "American Express", "Hipercard", "Outra"];
 
-type CartaoForm = { id: string; nome: string; bandeira: string; limiteTotalCentavos: number; diaFechamento: number; diaVencimento: number };
+type CartaoForm = {
+  id: string;
+  nome: string;
+  bandeira: string;
+  limiteTotalCentavos: number;
+  diaFechamento: number;
+  diaVencimento: number;
+  conexaoId?: string | null;
+  limiteDoBancoCentavos?: number;
+};
 
 function CamposCartao({ c }: { c?: CartaoForm }) {
   return (
@@ -61,8 +70,14 @@ function CamposCartao({ c }: { c?: CartaoForm }) {
         </select>
       </label>
       <label className={`${rotulo} col-span-2`}>
-        Limite total (R$)
+        {c?.conexaoId ? "Limite que você usa (R$)" : "Limite total (R$)"}
         <input name="limite" inputMode="decimal" required defaultValue={c ? centavosParaTexto(c.limiteTotalCentavos) : ""} placeholder="0,00" className={campo} />
+        {c?.conexaoId && (
+          <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400">
+            O banco informa limite de {formatarReais(c.limiteDoBancoCentavos ?? c.limiteTotalCentavos)}. Se você limita o uso no app do banco (o
+            disponível fica menor), informe aqui o valor que usa; a sincronização não muda este campo.
+          </span>
+        )}
       </label>
       <label className={rotulo}>
         Dia do fechamento

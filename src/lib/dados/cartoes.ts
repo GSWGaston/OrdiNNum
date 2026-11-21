@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { Db } from "@/db";
 import { cartao, transacao } from "@/db/schema";
 import { resumoDoCartao } from "@/lib/calculos/cartao";
@@ -23,13 +23,25 @@ export async function listarCartoes(db: Db, uid: string) {
       .where(and(eq(transacao.usuarioId, uid), isNotNull(transacao.cartaoId))),
   ]);
   const dia = hoje();
-  return cartoes.map((c) => ({ ...c, ...resumoDoCartao(c, lancs.filter((l) => l.cartaoId === c.id), dia) }));
+  return cartoes.map((c) => {
+    // limite informado pelo usuário vence o do banco (ex.: Nubank com uso limitado no app: o disponível vem sobre ele)
+    const efetivo = { ...c, limiteTotalCentavos: c.limiteUsuarioCentavos ?? c.limiteTotalCentavos };
+    return { ...efetivo, limiteDoBancoCentavos: c.limiteTotalCentavos, ...resumoDoCartao(efetivo, lancs.filter((l) => l.cartaoId === c.id), dia) };
+  });
 }
 
 export const criarCartao = (db: Db, uid: string, d: DadosCartao) => db.insert(cartao).values({ ...d, usuarioId: uid });
 
-export const atualizarCartao = (db: Db, uid: string, id: string, d: DadosCartao) =>
-  db.update(cartao).set(d).where(and(eq(cartao.id, id), eq(cartao.usuarioId, uid)));
+/** Cartão manual: tudo. Cartão do banco: o limite digitado vira o "limite que você usa" (a sincronização não mexe). */
+export async function atualizarCartao(db: Db, uid: string, id: string, d: DadosCartao) {
+  const dono = and(eq(cartao.id, id), eq(cartao.usuarioId, uid));
+  await db.update(cartao).set(d).where(and(dono, isNull(cartao.conexaoId)));
+  const { limiteTotalCentavos, ...resto } = d;
+  await db
+    .update(cartao)
+    .set({ ...resto, limiteUsuarioCentavos: limiteTotalCentavos })
+    .where(and(dono, isNotNull(cartao.conexaoId)));
+}
 
 export const excluirCartao = (db: Db, uid: string, id: string) =>
   db.delete(cartao).where(and(eq(cartao.id, id), eq(cartao.usuarioId, uid)));

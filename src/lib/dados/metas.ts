@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNotNull, lte } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { cartao, metaMensal, transacao } from "@/db/schema";
 import { parcelasFuturasPorMes } from "@/lib/calculos/credito";
@@ -36,7 +36,7 @@ export async function metaVigente(db: Db, uid: string, mes: string) {
 async function dividaCartoesAte(db: Db, uid: string, ate: string) {
   const [cartoes, lancs] = await Promise.all([
     db
-      .select({ id: cartao.id, limite: cartao.limiteTotalCentavos, disponivel: cartao.limiteDisponivelCentavos })
+      .select({ id: cartao.id, limite: sql<number>`coalesce(${cartao.limiteUsuarioCentavos}, ${cartao.limiteTotalCentavos})`.mapWith(Number), disponivel: cartao.limiteDisponivelCentavos })
       .from(cartao)
       .where(eq(cartao.usuarioId, uid)),
     db

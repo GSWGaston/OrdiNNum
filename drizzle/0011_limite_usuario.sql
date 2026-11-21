@@ -1,0 +1,1 @@
+ALTER TABLE "cartao" ADD COLUMN "limite_usuario_centavos" bigint;
