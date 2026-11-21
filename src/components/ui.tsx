@@ -31,7 +31,7 @@ export function SelectCategoria({
   return (
     <select name={name} id={id} defaultValue={defaultValue ?? ""} className={campo}>
       <option value="">{vazio}</option>
-      {(["despesa", "receita"] as const).map((t) => (
+      {(["despesa", "receita"] as const).filter((t) => arvore.some((c) => c.tipo === t)).map((t) => (
         <optgroup key={t} label={t === "despesa" ? "Despesas" : "Receitas"}>
           {arvore
             .filter((c) => c.tipo === t)

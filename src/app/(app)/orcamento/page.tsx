@@ -1,20 +1,34 @@
-import { salvarMeta } from "@/app/acoes";
-import { campo, cartao, rotulo, titulo } from "@/components/estilos";
+import { salvarMeta, salvarOrcamento } from "@/app/acoes";
+import { botaoPerigo, botaoSecundario, campo, cartao, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
 import { descreverMeta, GastoDiario } from "@/components/gasto-diario";
+import { BarraOrcamento } from "@/components/orcamentos";
+import { SelectCategoria } from "@/components/ui";
+import { progressoOrcamentos } from "@/lib/calculos/orcamento";
+import { listarCategorias } from "@/lib/dados/categorias";
+import { orcamentosVigentes } from "@/lib/dados/orcamentos";
+import { listarTransacoes } from "@/lib/dados/transacoes";
 import { db } from "@/db";
 import { hoje, nomeDoMes } from "@/lib/calculos/datas";
 import { gastoDiarioDoUsuario } from "@/lib/dados/metas";
 import { centavosParaTexto, formatarReais } from "@/lib/formato";
 import { exigirUsuario } from "@/lib/sessao";
 
-export const metadata = { title: "Meta do mês" };
+export const metadata = { title: "Meta e orçamento" };
 
 export default async function Orcamento() {
   const uid = await exigirUsuario();
   const dia = hoje();
   const mes = dia.slice(0, 7);
-  const dados = await gastoDiarioDoUsuario(db, uid, dia);
+  const [dados, orcamentos, lancamentos, categorias] = await Promise.all([
+    gastoDiarioDoUsuario(db, uid, dia),
+    orcamentosVigentes(db, uid, mes),
+    listarTransacoes(db, uid, { mes }),
+    listarCategorias(db, uid),
+  ]);
+  const progresso = progressoOrcamentos(orcamentos, lancamentos, categorias);
+  const cat = new Map(categorias.map((c) => [c.id, c]));
+  const despesas = categorias.filter((c) => c.tipo === "despesa");
 
   return (
     <>
@@ -62,6 +76,58 @@ export default async function Orcamento() {
             />
           </label>
           <Enviar>Salvar meta</Enviar>
+        </Form>
+      </section>
+
+      <section className={`${cartao} flex flex-col gap-4`} aria-labelledby="limites" id="limites">
+        <div>
+          <h2 id="limites" className="font-semibold">
+            Limites por categoria
+          </h2>
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+            Aviso aos 80% e aos 100%. O limite numa categoria principal soma as subcategorias (ex.: Carro inclui combustível e
+            manutenção). Vale para os próximos meses até você mudar.
+          </p>
+        </div>
+        {progresso.length === 0 && <p className="text-sm text-zinc-600 dark:text-zinc-400">Nenhum limite ainda. Comece pelas categorias em que mais gasta.</p>}
+        {progresso.map((p) => {
+          const c = cat.get(p.categoriaId);
+          return (
+            <div key={p.categoriaId} className="flex flex-col gap-2">
+              <BarraOrcamento p={p} nome={c?.nome ?? "?"} cor={c?.cor ?? "#a1a1aa"} />
+              <div className="flex flex-wrap items-end gap-2">
+                <Form action={salvarOrcamento} className="flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="mes" value={mes} />
+                  <input type="hidden" name="categoriaId" value={p.categoriaId} />
+                  <label className={`${rotulo} w-32`}>
+                    Novo limite
+                    <input name="valor" inputMode="decimal" required defaultValue={centavosParaTexto(p.limiteCentavos)} className={campo} />
+                  </label>
+                  <Enviar className={botaoSecundario}>Alterar</Enviar>
+                </Form>
+                <Form action={salvarOrcamento}>
+                  <input type="hidden" name="mes" value={mes} />
+                  <input type="hidden" name="categoriaId" value={p.categoriaId} />
+                  <input type="hidden" name="valor" value="0" />
+                  <Enviar className={botaoPerigo} confirmar={`Tirar o limite de ${c?.nome}?`}>
+                    Tirar limite
+                  </Enviar>
+                </Form>
+              </div>
+            </div>
+          );
+        })}
+        <Form action={salvarOrcamento} className="flex flex-wrap items-end gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          <input type="hidden" name="mes" value={mes} />
+          <label className={`${rotulo} min-w-40 flex-1`}>
+            Categoria
+            <SelectCategoria categorias={despesas} vazio="Escolha…" />
+          </label>
+          <label className={`${rotulo} w-32`}>
+            Limite no mês
+            <input name="valor" inputMode="decimal" required placeholder="0,00" className={campo} />
+          </label>
+          <Enviar>Adicionar limite</Enviar>
         </Form>
       </section>
 

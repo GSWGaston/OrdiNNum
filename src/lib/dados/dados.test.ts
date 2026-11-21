@@ -27,6 +27,7 @@ import {
   listarTransacoes,
 } from "./transacoes";
 import { definirMeta, gastoDiarioDoUsuario, metaVigente } from "./metas";
+import { definirOrcamento, orcamentosVigentes } from "./orcamentos";
 import { limparFalhas, loginBloqueado, MAX_FALHAS, registrarFalha } from "./tentativas";
 import { criarUsuario, excluirUsuario, exportarDados } from "./usuarios";
 import { resumoDoMes } from "@/lib/calculos/resumo";
@@ -144,7 +145,7 @@ describe("isolamento entre usuários", () => {
   it("excluir a conta do usuário apaga todos os dados dele e só dele", async () => {
     await excluirUsuario(db, b.uid);
     const e = await exportarDados(db, b.uid);
-    expect(e).toEqual({ usuario: undefined, contas: [], cartoes: [], categorias: [], recorrencias: [], metas: [], transacoes: [] });
+    expect(e).toEqual({ usuario: undefined, contas: [], cartoes: [], categorias: [], recorrencias: [], metas: [], orcamentos: [], transacoes: [] });
     expect(await listarContas(db, a.uid, "2026-12-31")).toHaveLength(1);
   });
 });
@@ -294,5 +295,30 @@ describe("meta do mês e gasto diário", () => {
     const r = await gastoDiarioDoUsuario(db, u.uid, "2026-11-21");
     // saldo 1.000 - dívida 100 - meta 300 = 600; limite de hoje = (600 + 100 gastos hoje) / 10 dias = 70
     expect(r).toMatchObject({ disponivel: 60000, limiteHoje: 7000, gastoHoje: 10000, restanteHoje: -3000, estado: "estourado" });
+  });
+});
+
+describe("orçamento por categoria", () => {
+  it("limite vale nos meses seguintes, 0 tira, só despesa e isolado por usuário", async () => {
+    const u = await novoUsuario("orc@exemplo.test");
+    const outro = await novoUsuario("orc-outro@exemplo.test");
+    const cats = await listarCategorias(db, u.uid);
+    const carro = cats.find((c) => c.nome === "Carro" && !c.paiId)!;
+    expect(cats.filter((c) => c.paiId === carro.id).map((c) => c.nome).sort()).toEqual(
+      ["Combustível", "Estacionamento e pedágio", "IPVA e licenciamento", "Manutenção", "Seguro"],
+    );
+
+    await definirOrcamento(db, u.uid, "2026-10", carro.id, 50000);
+    await definirOrcamento(db, u.uid, "2026-11", u.despesa.id, 200000);
+    expect((await orcamentosVigentes(db, u.uid, "2026-11")).map((o) => [o.categoriaId, o.limiteCentavos]).sort()).toEqual(
+      [[carro.id, 50000], [u.despesa.id, 200000]].sort(),
+    );
+    await definirOrcamento(db, u.uid, "2026-12", carro.id, 0);
+    expect((await orcamentosVigentes(db, u.uid, "2026-12")).find((o) => o.categoriaId === carro.id)!.limiteCentavos).toBe(0);
+    expect((await orcamentosVigentes(db, u.uid, "2026-11")).find((o) => o.categoriaId === carro.id)!.limiteCentavos).toBe(50000);
+
+    await expect(definirOrcamento(db, u.uid, "2026-11", u.receita.id, 1)).rejects.toThrow(ErroDados);
+    await expect(definirOrcamento(db, outro.uid, "2026-11", carro.id, 1)).rejects.toThrow(ErroDados);
+    expect(await orcamentosVigentes(db, outro.uid, "2026-12")).toEqual([]);
   });
 });

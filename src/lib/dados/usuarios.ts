@@ -1,11 +1,12 @@
 import { asc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { cartao, categoria, conta, metaMensal, recorrencia, transacao, usuario } from "@/db/schema";
+import { cartao, categoria, conta, metaMensal, orcamentoCategoria, recorrencia, transacao, usuario } from "@/db/schema";
 
 const PADRAO: [string, "receita" | "despesa", string, string[]][] = [
   ["Moradia", "despesa", "#8b5cf6", ["Aluguel", "Luz", "Água", "Internet"]],
   ["Alimentação", "despesa", "#f97316", ["Mercado", "Restaurante"]],
-  ["Transporte", "despesa", "#0ea5e9", ["Combustível", "Transporte público"]],
+  ["Transporte", "despesa", "#0ea5e9", ["Transporte público", "Aplicativo e táxi"]],
+  ["Carro", "despesa", "#f59e0b", ["Combustível", "Manutenção", "Seguro", "IPVA e licenciamento", "Estacionamento e pedágio"]],
   ["Saúde", "despesa", "#ef4444", []],
   ["Educação", "despesa", "#14b8a6", []],
   ["Lazer", "despesa", "#ec4899", []],
@@ -47,6 +48,7 @@ export async function exportarDados(db: Db, uid: string) {
     categorias: await db.select().from(categoria).where(eq(categoria.usuarioId, uid)),
     recorrencias: await db.select().from(recorrencia).where(eq(recorrencia.usuarioId, uid)),
     metas: await db.select().from(metaMensal).where(eq(metaMensal.usuarioId, uid)),
+    orcamentos: await db.select().from(orcamentoCategoria).where(eq(orcamentoCategoria.usuarioId, uid)),
     transacoes: await db.select().from(transacao).where(eq(transacao.usuarioId, uid)).orderBy(asc(transacao.data)),
   };
 }

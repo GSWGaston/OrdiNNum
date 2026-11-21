@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hoje, limitesDoMes, ocorrenciasAte, proximaData, somarMeses, somarMesesAoMes } from "./datas";
 import { faturaDaCompra, resumoDoCartao } from "./cartao";
+import { progressoOrcamentos } from "./orcamento";
 import { gerarParcelas } from "./parcelas";
 import { despesasPorCategoria, previstosAte, resumoDoMes, saldoDaConta } from "./resumo";
 import { centavosParaTexto, formatarData, formatarReais, lerReais } from "../formato";
@@ -128,6 +129,41 @@ describe("cartão", () => {
     const r = resumoDoCartao(c, [{ data: "2026-11-01", valorCentavos: -1000 }, { data: "2026-11-05", valorCentavos: 1500 }]);
     expect(r.devido).toBe(-500);
     expect(r.disponivel).toBe(500500);
+  });
+});
+
+describe("orçamento por categoria", () => {
+  const cats = [
+    { id: "alim", paiId: null },
+    { id: "rest", paiId: "alim" },
+    { id: "merc", paiId: "alim" },
+    { id: "lazer", paiId: null },
+  ];
+  const lancs = [
+    { valorCentavos: -30000, categoriaId: "rest" },
+    { valorCentavos: -50000, categoriaId: "merc" },
+    { valorCentavos: -9000, categoriaId: "lazer" },
+    { valorCentavos: -100000, categoriaId: "lazer", transferenciaId: "t" }, // não conta
+    { valorCentavos: 5000, categoriaId: "lazer" }, // estorno/receita não conta
+    { valorCentavos: -1000, categoriaId: null },
+  ];
+  it("principal soma subcategorias; alerta aos 80% e estoura aos 100%", () => {
+    const r = progressoOrcamentos(
+      [
+        { categoriaId: "alim", limiteCentavos: 80000 },
+        { categoriaId: "rest", limiteCentavos: 37500 },
+        { categoriaId: "lazer", limiteCentavos: 20000 },
+        { categoriaId: "merc", limiteCentavos: 0 }, // 0 = sem limite
+      ],
+      lancs,
+      cats,
+    );
+    expect(r.map((o) => [o.categoriaId, o.gasto, o.pct, o.estado])).toEqual([
+      ["alim", 80000, 100, "estourado"],
+      ["rest", 30000, 80, "alerta"],
+      ["lazer", 9000, 45, "ok"],
+    ]);
+    expect(r[2]!.restante).toBe(11000);
   });
 });
 

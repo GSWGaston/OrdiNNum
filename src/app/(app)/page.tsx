@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { cartao, link, titulo } from "@/components/estilos";
 import { GastoDiario } from "@/components/gasto-diario";
+import { AlertasOrcamento } from "@/components/orcamentos";
+import { progressoOrcamentos } from "@/lib/calculos/orcamento";
+import { orcamentosVigentes } from "@/lib/dados/orcamentos";
 import { Valor, Vazio } from "@/components/ui";
 import { db } from "@/db";
 import { hoje, limitesDoMes, mesValido, nomeDoMes, somarDias, somarMesesAoMes } from "@/lib/calculos/datas";
@@ -23,13 +26,14 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   const { fim } = limitesDoMes(mes);
 
   const ehMesAtual = mes === mesAtual;
-  const [contas, cartoes, lancamentos, recorrencias, categorias, gastoDoDia] = await Promise.all([
+  const [contas, cartoes, lancamentos, recorrencias, categorias, gastoDoDia, orcamentos] = await Promise.all([
     listarContas(db, uid, dia),
     listarCartoes(db, uid),
     listarTransacoes(db, uid, { mes }),
     listarRecorrencias(db, uid),
     listarCategorias(db, uid),
     ehMesAtual ? gastoDiarioDoUsuario(db, uid, dia) : null,
+    orcamentosVigentes(db, uid, mes),
   ]);
 
   if (!contas.length)
@@ -60,6 +64,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   return (
     <>
       {ehMesAtual && <GastoDiario dados={gastoDoDia} />}
+      <AlertasOrcamento progresso={progressoOrcamentos(orcamentos, lancamentos, categorias)} categorias={nomeCat} />
       <nav aria-label="Mês" className="flex items-center justify-between">
         <Link href={`/?mes=${somarMesesAoMes(mes, -1)}`} className={link} aria-label="Mês anterior">
           ‹ anterior

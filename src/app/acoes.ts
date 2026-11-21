@@ -30,6 +30,7 @@ import {
 } from "@/lib/dados/transacoes";
 import { buscarPorEmail, criarUsuario, excluirUsuario } from "@/lib/dados/usuarios";
 import { definirMeta } from "@/lib/dados/metas";
+import { definirOrcamento } from "@/lib/dados/orcamentos";
 import { JANELA_MIN } from "@/lib/dados/tentativas";
 import type { Estado } from "@/lib/estado";
 import { exigirUsuario } from "@/lib/sessao";
@@ -160,6 +161,22 @@ export async function salvarMeta(_: Estado, fd: FormData) {
   if (!p.success) return { erro: msg(p.error) };
   const { mes, modo, valor: v } = p.data;
   return rodar((uid) => definirMeta(db, uid, mes, { modo, valorCentavos: v }), "Meta salva.");
+}
+
+const mesTexto = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Mês inválido.");
+
+export async function salvarOrcamento(_: Estado, fd: FormData) {
+  const p = ler(
+    z.object({
+      mes: mesTexto,
+      categoriaId: z.uuid({ error: "Escolha a categoria." }),
+      valor: z.string().transform((s) => (s.trim() === "" ? 0 : lerReais(s))).pipe(z.number({ error: "Valor inválido." }).int().min(0).max(1e11)),
+    }),
+    fd,
+  );
+  if (!p.success) return { erro: msg(p.error) };
+  const { mes, categoriaId, valor: v } = p.data;
+  return rodar((uid) => definirOrcamento(db, uid, mes, categoriaId, v), v ? "Limite salvo." : "Limite removido.");
 }
 
 // ---------- contas ----------

@@ -112,6 +112,20 @@ export const metaMensal = pgTable(
   (t) => [unique().on(t.usuarioId, t.mes)],
 );
 
+export const orcamentoCategoria = pgTable(
+  "orcamento_categoria",
+  {
+    id: id(),
+    usuarioId: dono(),
+    categoriaId: uuid()
+      .notNull()
+      .references(() => categoria.id, { onDelete: "cascade" }),
+    mes: text().notNull(), // AAAA-MM; vale para os meses seguintes até outro registro
+    limiteCentavos: centavos().notNull(), // 0 = sem limite a partir deste mês
+  },
+  (t) => [unique().on(t.usuarioId, t.categoriaId, t.mes)],
+);
+
 export const cartao = pgTable(
   "cartao",
   {
