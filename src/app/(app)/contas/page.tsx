@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { pagarFaturaAcao, removerCartao, removerConta, salvarCartao, salvarConta, transferirAcao } from "@/app/acoes";
-import { botaoPerigo, botaoSecundario, campo, cartao, rotulo, titulo } from "@/components/estilos";
+import { botaoPerigo, botaoSecundario, campo, cartao, link, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
 import { SelectConta, TIPOS_CONTA, Valor } from "@/components/ui";
 import { db } from "@/db";
@@ -163,7 +164,14 @@ export default async function Contas() {
         </section>
       )}
 
-      <h2 className={`${titulo} mt-4`}>Cartões de crédito</h2>
+      <div className="mt-4 flex items-baseline justify-between gap-2">
+        <h2 className={titulo}>Cartões de crédito</h2>
+        {cartoes.length > 0 && (
+          <Link href="/credito" className={`${link} text-sm`}>
+            Ver uso total
+          </Link>
+        )}
+      </div>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Compra no cartão conta como gasto no dia da compra. A fatura aparece como conta a pagar e, ao pagar, o dinheiro sai da
         conta sem contar de novo como despesa.

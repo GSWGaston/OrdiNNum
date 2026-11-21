@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hoje, limitesDoMes, ocorrenciasAte, proximaData, somarMeses, somarMesesAoMes } from "./datas";
 import { faturaDaCompra, resumoDoCartao } from "./cartao";
+import { consolidarCredito, FAIXAS_PADRAO, faixaDeUso, gastoNoCreditoNoMes, parcelasFuturasPorMes } from "./credito";
 import { progressoOrcamentos } from "./orcamento";
 import { gerarParcelas } from "./parcelas";
 import { despesasPorCategoria, previstosAte, resumoDoMes, saldoDaConta } from "./resumo";
@@ -164,6 +165,43 @@ describe("orçamento por categoria", () => {
       ["lazer", 9000, 45, "ok"],
     ]);
     expect(r[2]!.restante).toBe(11000);
+  });
+});
+
+describe("crédito consolidado", () => {
+  const f = FAIXAS_PADRAO;
+  it("faixas: até 30% verde, até 60% amarela, acima vermelha", () => {
+    expect([0, 30, 30.1, 60, 60.1, 100].map((p) => faixaDeUso(p, f))).toEqual(["verde", "verde", "amarela", "amarela", "vermelha", "vermelha"]);
+    expect(faixaDeUso(50, { amarelaPct: 40, vermelhaPct: 80 })).toBe("amarela");
+  });
+  it("soma limites e disponíveis; percentual por cartão", () => {
+    const r = consolidarCredito(
+      [
+        { id: "a", limiteTotalCentavos: 500000, disponivel: 450000 }, // 10%
+        { id: "b", limiteTotalCentavos: 500000, disponivel: 150000 }, // 70%
+      ],
+      f,
+    );
+    expect(r).toMatchObject({ limiteTotal: 1000000, disponivel: 600000, usado: 400000, usoPct: 40, faixa: "amarela" });
+    expect(r.porCartao.map((c) => [c.id, c.usoPct, c.faixa])).toEqual([["a", 10, "verde"], ["b", 70, "vermelha"]]);
+    expect(consolidarCredito([], f)).toMatchObject({ limiteTotal: 0, usoPct: 0, faixa: "verde" });
+  });
+  it("gasto no crédito do mês e parcelas futuras por mês", () => {
+    const base = { cartaoId: "a", grupoParcelas: null, transferenciaId: null };
+    const lancs = [
+      { ...base, data: "2026-11-05", valorCentavos: -10000 },
+      { ...base, data: "2026-11-15", valorCentavos: -30000, grupoParcelas: "g" },
+      { ...base, data: "2026-12-15", valorCentavos: -30000, grupoParcelas: "g" },
+      { ...base, data: "2027-01-15", valorCentavos: -30000, grupoParcelas: "g" },
+      { ...base, data: "2026-12-20", valorCentavos: -5000, grupoParcelas: "h" },
+      { ...base, data: "2026-11-10", valorCentavos: 40000, transferenciaId: "t" }, // pagamento
+      { ...base, cartaoId: null, data: "2026-11-06", valorCentavos: -99900 }, // conta, não cartão
+    ];
+    expect(gastoNoCreditoNoMes(lancs, "2026-11")).toBe(40000);
+    expect(parcelasFuturasPorMes(lancs, "2026-11")).toEqual([
+      { mes: "2026-12", total: 35000 },
+      { mes: "2027-01", total: 30000 },
+    ]);
   });
 });
 

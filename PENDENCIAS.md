@@ -50,7 +50,7 @@ Comparação da Fase 1 entregue com a especificação (PDF) e o prompt. Cada ite
 | --- | --- | --- |
 | F1 | Meta do mês + gasto diário sugerido | **Feito.** Tela "Meta", destaque no painel, "de onde vem o número". |
 | F2 | Orçamento por categoria (alertas 80%/100%) | **Feito.** Limites na tela "Metas", aviso no painel aos 80% e 100%. Nova categoria **Carro** (Combustível, Manutenção, Seguro, IPVA e licenciamento, Estacionamento e pedágio); em contas antigas o Combustível saiu de Transporte para Carro. |
-| F3 | Crédito consolidado (medidor com faixas, tela Crédito, parcelas futuras por mês) | A fazer |
+| F3 | Crédito consolidado (medidor com faixas, tela Crédito, parcelas futuras por mês) | **Feito.** Medidor no painel, tela Crédito (link no painel e em Contas), faixas ajustáveis por usuário. |
 | F4 | Objetivos (aporte mensal, data estimada, status) | A fazer |
 
 ## G. Ideias anotadas para depois

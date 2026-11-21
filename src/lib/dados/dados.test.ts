@@ -28,6 +28,7 @@ import {
 } from "./transacoes";
 import { definirMeta, gastoDiarioDoUsuario, metaVigente } from "./metas";
 import { definirOrcamento, orcamentosVigentes } from "./orcamentos";
+import { definirFaixas, resumoCredito } from "./credito";
 import { limparFalhas, loginBloqueado, MAX_FALHAS, registrarFalha } from "./tentativas";
 import { criarUsuario, excluirUsuario, exportarDados } from "./usuarios";
 import { resumoDoMes } from "@/lib/calculos/resumo";
@@ -322,3 +323,29 @@ describe("orçamento por categoria", () => {
     expect(await orcamentosVigentes(db, outro.uid, "2026-12")).toEqual([]);
   });
 });
+
+describe("crédito consolidado", () => {
+  it("soma os cartões do usuário, faixas configuráveis e isoladas", async () => {
+    const u = await novoUsuario("credito@exemplo.test"); // cartão limite R$ 5.000
+    const outro = await novoUsuario("credito-outro@exemplo.test");
+    await criarCartao(db, u.uid, { nome: "Segundo", bandeira: "Visa", limiteTotalCentavos: 500000, diaFechamento: 3, diaVencimento: 10 });
+    const base = { contaId: null, cartaoId: u.cartao.id, categoriaId: null, observacao: null, descricao: "x" };
+    await criarTransacao(db, u.uid, { ...base, data: "2026-11-05", valorCentavos: -300000, parcelas: 3 }); // 1.000/mês
+    await criarTransacao(db, outro.uid, { ...base, cartaoId: outro.cartao.id, data: "2026-11-05", valorCentavos: -400000, parcelas: 1 });
+
+    const r = (await resumoCredito(db, u.uid, "2026-11"))!;
+    expect(r.consolidado).toMatchObject({ limiteTotal: 1000000, disponivel: 700000, usoPct: 30, faixa: "verde" });
+    expect(r.gastoNoMes).toBe(100000);
+    expect(r.parcelasFuturas).toEqual([{ mes: "2026-12", total: 100000 }, { mes: "2027-01", total: 100000 }]);
+
+    await definirFaixas(db, u.uid, { amarelaPct: 20, vermelhaPct: 50 });
+    expect((await resumoCredito(db, u.uid, "2026-11"))!.consolidado.faixa).toBe("amarela");
+    expect((await resumoCredito(db, outro.uid, "2026-11"))!.faixas).toEqual({ amarelaPct: 30, vermelhaPct: 60 });
+    await expect(definirFaixas(db, u.uid, { amarelaPct: 60, vermelhaPct: 50 })).rejects.toThrow(ErroDados);
+    expect(await resumoCredito(db, (await novoUsuarioSemCartao("sem@exemplo.test")), "2026-11")).toBeNull();
+  });
+});
+
+async function novoUsuarioSemCartao(email: string) {
+  return criarUsuario(db, { nome: email, email, senhaHash: "x" });
+}

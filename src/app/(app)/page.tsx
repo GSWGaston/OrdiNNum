@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { cartao, link, titulo } from "@/components/estilos";
 import { GastoDiario } from "@/components/gasto-diario";
+import { MedidorCredito } from "@/components/credito";
 import { AlertasOrcamento } from "@/components/orcamentos";
 import { progressoOrcamentos } from "@/lib/calculos/orcamento";
 import { orcamentosVigentes } from "@/lib/dados/orcamentos";
+import { resumoCredito } from "@/lib/dados/credito";
 import { Valor, Vazio } from "@/components/ui";
 import { db } from "@/db";
 import { hoje, limitesDoMes, mesValido, nomeDoMes, somarDias, somarMesesAoMes } from "@/lib/calculos/datas";
@@ -26,7 +28,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   const { fim } = limitesDoMes(mes);
 
   const ehMesAtual = mes === mesAtual;
-  const [contas, cartoes, lancamentos, recorrencias, categorias, gastoDoDia, orcamentos] = await Promise.all([
+  const [contas, cartoes, lancamentos, recorrencias, categorias, gastoDoDia, orcamentos, credito] = await Promise.all([
     listarContas(db, uid, dia),
     listarCartoes(db, uid),
     listarTransacoes(db, uid, { mes }),
@@ -34,6 +36,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
     listarCategorias(db, uid),
     ehMesAtual ? gastoDiarioDoUsuario(db, uid, dia) : null,
     orcamentosVigentes(db, uid, mes),
+    resumoCredito(db, uid, mesAtual),
   ]);
 
   if (!contas.length)
@@ -65,6 +68,21 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
     <>
       {ehMesAtual && <GastoDiario dados={gastoDoDia} />}
       <AlertasOrcamento progresso={progressoOrcamentos(orcamentos, lancamentos, categorias)} categorias={nomeCat} />
+      {credito && (
+        <section className={cartao} aria-labelledby="uso-credito">
+          <h2 id="uso-credito" className="mb-1 text-sm text-zinc-600 dark:text-zinc-400">
+            Uso do crédito ({credito.cartoes.length} cartão(ões))
+          </h2>
+          <MedidorCredito usoPct={credito.consolidado.usoPct} faixa={credito.consolidado.faixa} faixas={credito.faixas} rotulo="Uso do crédito" />
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+            {formatarReais(credito.consolidado.disponivel)} livres de {formatarReais(credito.consolidado.limiteTotal)} ·{" "}
+            {formatarReais(credito.totalParcelasFuturas)} em parcelas futuras ·{" "}
+            <Link href="/credito" className={link}>
+              ver detalhes
+            </Link>
+          </p>
+        </section>
+      )}
       <nav aria-label="Mês" className="flex items-center justify-between">
         <Link href={`/?mes=${somarMesesAoMes(mes, -1)}`} className={link} aria-label="Mês anterior">
           ‹ anterior

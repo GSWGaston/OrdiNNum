@@ -34,6 +34,9 @@ export const usuario = pgTable("usuario", {
   nome: text().notNull(),
   email: text().notNull().unique(),
   senhaHash: text().notNull(),
+  // faixas do medidor de uso do crédito (spec: configuráveis; padrão 30% e 60%)
+  faixaAmarelaPct: integer().notNull().default(30),
+  faixaVermelhaPct: integer().notNull().default(60),
   criadoEm: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
 

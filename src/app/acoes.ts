@@ -29,6 +29,7 @@ import {
   excluirTransacao,
 } from "@/lib/dados/transacoes";
 import { buscarPorEmail, criarUsuario, excluirUsuario } from "@/lib/dados/usuarios";
+import { definirFaixas } from "@/lib/dados/credito";
 import { definirMeta } from "@/lib/dados/metas";
 import { definirOrcamento } from "@/lib/dados/orcamentos";
 import { JANELA_MIN } from "@/lib/dados/tentativas";
@@ -177,6 +178,13 @@ export async function salvarOrcamento(_: Estado, fd: FormData) {
   if (!p.success) return { erro: msg(p.error) };
   const { mes, categoriaId, valor: v } = p.data;
   return rodar((uid) => definirOrcamento(db, uid, mes, categoriaId, v), v ? "Limite salvo." : "Limite removido.");
+}
+
+export async function salvarFaixas(_: Estado, fd: FormData) {
+  const pct = z.coerce.number({ error: "Informe um número." }).int().min(1).max(100);
+  const p = ler(z.object({ amarelaPct: pct, vermelhaPct: pct }), fd);
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => definirFaixas(db, uid, p.data), "Faixas salvas.");
 }
 
 // ---------- contas ----------
