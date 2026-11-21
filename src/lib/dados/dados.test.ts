@@ -8,7 +8,7 @@ import { atualizarCartao, criarCartao, excluirCartao, listarCartoes, pagarFatura
 import { atualizarCategoria, criarCategoria, excluirCategoria, listarCategorias } from "./categorias";
 import { ErroDados } from "./comum";
 import { atualizarConta, criarConta, excluirConta, listarContas, transferir } from "./contas";
-import { criarRecorrencia, excluirRecorrencia, lancarRecorrencia, listarRecorrencias } from "./recorrencias";
+import { criarRecorrencia, definirAutomatica, excluirRecorrencia, lancarRecorrencia, lancarVencidas, listarRecorrencias } from "./recorrencias";
 import {
   atualizarTransacao,
   categorizarEmLote,
@@ -100,6 +100,8 @@ describe("isolamento entre usuários", () => {
     await atualizarCategoria(db, a.uid, b.despesa.id, { nome: "hackeada", cor: "#000000" });
     await excluirCategoria(db, a.uid, b.despesa.id);
     await excluirRecorrencia(db, a.uid, recB.id);
+    await definirAutomatica(db, a.uid, recB.id, true);
+    await lancarVencidas(db, a.uid, "2027-12-31");
     expect(await estadoDeB()).toEqual(antes);
   });
 
@@ -203,5 +205,33 @@ describe("um mês inteiro lançado dá o saldo correto", () => {
     const compra = (await listarTransacoes(db, u.uid, { mes: "2026-11" }))[0]!;
     await atualizarTransacao(db, u.uid, compra.id, { ...noCartao, contaId: u.conta.id, cartaoId: null, data: compra.data, valorCentavos: compra.valorCentavos });
     expect((await listarContas(db, u.uid, "2026-11-30"))[0]!.saldoAtual).toBe(80000);
+  });
+});
+
+describe("recorrência automática", () => {
+  it("lança sozinha as vencidas (inclusive atrasadas), uma vez só, e ignora as manuais", async () => {
+    const u = await novoUsuario("auto@exemplo.test");
+    const base = { contaId: u.conta.id, categoriaId: u.despesa.id, periodicidade: "mensal" as const };
+    await criarRecorrencia(db, u.uid, { ...base, descricao: "Aluguel auto", valorCentavos: -150000, proximaData: "2026-09-10", automatica: true });
+    await criarRecorrencia(db, u.uid, { ...base, descricao: "Luz manual", valorCentavos: -20000, proximaData: "2026-09-10", automatica: false });
+
+    // duas chamadas ao mesmo tempo + uma depois: nada duplica
+    await Promise.all([lancarVencidas(db, u.uid, "2026-11-21"), lancarVencidas(db, u.uid, "2026-11-21")]);
+    await lancarVencidas(db, u.uid, "2026-11-21");
+
+    const lancados = [];
+    for (const mes of ["2026-09", "2026-10", "2026-11", "2026-12"]) lancados.push(...(await listarTransacoes(db, u.uid, { mes })));
+    expect(lancados.map((t) => `${t.data} ${t.descricao}`).sort()).toEqual([
+      "2026-09-10 Aluguel auto",
+      "2026-10-10 Aluguel auto",
+      "2026-11-10 Aluguel auto",
+    ]);
+    const recs = await listarRecorrencias(db, u.uid);
+    expect(recs.map((r) => `${r.descricao} ${r.proximaData}`).sort()).toEqual(["Aluguel auto 2026-12-10", "Luz manual 2026-09-10"]);
+
+    // virar automática passa a lançar a manual também
+    await definirAutomatica(db, u.uid, recs.find((r) => r.descricao === "Luz manual")!.id, true);
+    await lancarVencidas(db, u.uid, "2026-11-21");
+    expect((await listarTransacoes(db, u.uid, { mes: "2026-11" })).map((t) => t.descricao).sort()).toEqual(["Aluguel auto", "Luz manual"]);
   });
 });

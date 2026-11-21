@@ -15,6 +15,13 @@
       "when": 1795281940855,
       "tag": "0001_cartoes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795282671263,
+      "tag": "0002_recorrencia_automatica",
+      "breakpoints": true
     }
   ]
 }

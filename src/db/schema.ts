@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
   date,
   foreignKey,
@@ -75,6 +76,8 @@ export const recorrencia = pgTable(
     valorCentavos: centavos().notNull(), // negativo = saída
     periodicidade: periodicidade().notNull(),
     proximaData: date().notNull(),
+    // true: vira lançamento sozinha no vencimento; false: espera o usuário tocar "Lançar" (contas de valor variável)
+    automatica: boolean().notNull().default(false),
     categoriaId: uuid().references(() => categoria.id, { onDelete: "set null" }),
     contaId: uuid()
       .notNull()

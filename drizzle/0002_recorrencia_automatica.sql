@@ -1,0 +1,1 @@
+ALTER TABLE "recorrencia" ADD COLUMN "automatica" boolean DEFAULT false NOT NULL;

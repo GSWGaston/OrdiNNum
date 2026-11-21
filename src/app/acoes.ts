@@ -12,7 +12,7 @@ import { atualizarCategoria, criarCategoria, excluirCategoria } from "@/lib/dado
 import { ErroDados } from "@/lib/dados/comum";
 import { atualizarCartao, criarCartao, excluirCartao, pagarFatura } from "@/lib/dados/cartoes";
 import { atualizarConta, criarConta, excluirConta, transferir } from "@/lib/dados/contas";
-import { criarRecorrencia, excluirRecorrencia, lancarRecorrencia } from "@/lib/dados/recorrencias";
+import { criarRecorrencia, definirAutomatica, excluirRecorrencia, lancarRecorrencia } from "@/lib/dados/recorrencias";
 import {
   atualizarTransacao,
   categorizarEmLote,
@@ -263,12 +263,20 @@ export async function salvarRecorrencia(_: Estado, fd: FormData) {
       proximaData: dia,
       contaId: z.uuid({ error: "Escolha uma conta." }),
       categoriaId: idOpcional,
+      automatica: z.preprocess((v) => v === "on", z.boolean()),
     }),
     fd,
   );
   if (!p.success) return { erro: msg(p.error) };
   const { tipo: t, valor: v, ...d } = p.data;
   return rodar((uid) => criarRecorrencia(db, uid, { ...d, valorCentavos: comSinal(t, v) }), "Recorrência criada.");
+}
+
+export async function alternarAutomatica(_: Estado, fd: FormData) {
+  const p = z.object({ id, automatica: z.enum(["sim", "nao"]) }).safeParse(Object.fromEntries(fd));
+  if (!p.success) return { erro: msg(p.error) };
+  const auto = p.data.automatica === "sim";
+  return rodar((uid) => definirAutomatica(db, uid, p.data.id, auto), auto ? "Agora lança sozinha no vencimento." : "Agora espera você lançar.");
 }
 
 export async function removerRecorrencia(_: Estado, fd: FormData) {

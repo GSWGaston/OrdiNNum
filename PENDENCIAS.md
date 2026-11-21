@@ -10,7 +10,7 @@ Comparação da Fase 1 entregue com a especificação (PDF) e o prompt. Cada ite
 | A2 | Backups diários criptografados com teste de restauração | Spec, Segurança | Depende do provedor (Neon/Supabase têm backup gerenciado). Nada configurado. |
 | A3 | Banco gerenciado + deploy na Vercel | Stack | Roda local com PGlite. Falta criar o Neon/Supabase e o projeto na Vercel (precisam da sua conta). |
 | A4 | Tema claro/escuro com botão | Prompt, Stack | Segue o tema do sistema automaticamente; não há botão para trocar. |
-| A5 | Recorrências automáticas | Princípio "automação primeiro" | Recorrência só vira lançamento quando você toca "Lançar". Alternativa: lançar sozinha no vencimento (Vercel Cron). |
+| A5 | ~~Recorrências automáticas~~ **Feito**: cada recorrência é automática ou manual (botão para alternar). As automáticas são lançadas ao abrir o app, com a data do vencimento, inclusive meses atrasados, sem duplicar. Sem Vercel Cron por enquanto (só faria diferença para alertas sem o usuário entrar). | Princípio "automação primeiro" | Recorrência só vira lançamento quando você toca "Lançar". Alternativa: lançar sozinha no vencimento (Vercel Cron). |
 | A6 | Editar recorrência / pular uma ocorrência | Não explícito | Hoje só dá para excluir e recriar. |
 | A7 | CSP sem `'unsafe-inline'` | Spec, Segurança (CSP) | CSP existe, mas aceita scripts inline. Endurecer com nonce exige `proxy.ts`. |
 
@@ -34,6 +34,7 @@ Comparação da Fase 1 entregue com a especificação (PDF) e o prompt. Cada ite
 | C2 | Limite de tentativas de login | Proteção contra força bruta na senha. |
 | C3 | Recuperar senha ("esqueci minha senha") | Exige envio de e-mail (provedor de e-mail). |
 | C4 | Fuso horário por usuário | "Hoje" está fixo em São Paulo. |
+| C6 | Sessão de usuário apagado | Se a conta for apagada, um navegador que ainda tenha o cookie vê o app vazio até clicar "Sair" (o cookie vale até expirar). Acontece também ao rodar `npm run seed` logado. |
 | C5 | Lançamento futuro aparece na lista com "· futuro", mas não há visão de "agenda" | Útil quando houver muitas parcelas. |
 
 ## D. Fases seguintes (ainda não começadas, como o prompt manda)

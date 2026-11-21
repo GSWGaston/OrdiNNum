@@ -67,8 +67,8 @@ async function main() {
   await pagarFatura(db, uid, { cartaoId: cartao!.id, contaId: corrente!.id, valorCentavos: 25000, data: d(mes, 10) });
 
   const prox = somarMesesAoMes(mes, 1);
-  await criarRecorrencia(db, uid, { descricao: "[exemplo] Aluguel", valorCentavos: -180000, periodicidade: "mensal", proximaData: d(mes, 10), contaId: corrente!.id, categoriaId: cat.get("Aluguel") ?? null });
-  await criarRecorrencia(db, uid, { descricao: "[exemplo] Salário", valorCentavos: 650000, periodicidade: "mensal", proximaData: d(prox, 5), contaId: corrente!.id, categoriaId: cat.get("Salário") ?? null });
+  await criarRecorrencia(db, uid, { descricao: "[exemplo] Aluguel", valorCentavos: -180000, periodicidade: "mensal", proximaData: d(mes, 10), contaId: corrente!.id, categoriaId: cat.get("Aluguel") ?? null, automatica: true });
+  await criarRecorrencia(db, uid, { descricao: "[exemplo] Salário", valorCentavos: 650000, periodicidade: "mensal", proximaData: d(prox, 5), contaId: corrente!.id, categoriaId: cat.get("Salário") ?? null, automatica: true });
   await criarRecorrencia(db, uid, { descricao: "[exemplo] Academia", valorCentavos: -11990, periodicidade: "mensal", proximaData: d(mes, 25), contaId: corrente!.id, categoriaId: cat.get("Saúde") ?? null });
 
   console.log(`Seed pronto: ${EMAIL} / ${SENHA} (dados fictícios)`);

@@ -70,7 +70,9 @@ As demais do modelo (metas, orçamento, objetivos, conexões, regras) entram nas
   com data até hoje (lançamentos futuros, como parcelas, só contam quando chegam). Conta do banco (fase 3) usará o saldo
   informado. Assim editar/apagar lançamento nunca deixa saldo inconsistente.
 - **Recorrência tem `conta_id`** (não estava no modelo): precisa saber de onde sai o dinheiro ao lançar.
-- **Recorrência é lançada por confirmação** ("Lançar", com valor ajustável para contas variáveis como luz).
+- **Recorrência automática ou manual**: automática vira lançamento sozinha (verificado em `exigirUsuario()` a cada
+  acesso, com a data do vencimento, inclusive atrasadas; update condicional impede duplicar). Manual espera "Lançar",
+  com valor ajustável para contas variáveis como luz. Recorrências criadas antes disso ficaram manuais.
   Pendentes aparecem no painel como próximos vencimentos e entram na previsão de fim do mês.
 - **Parcelamento**: o valor digitado é o total; gera 1 transação por mês ligadas por `grupo_parcelas`,
   centavos que sobram vão na 1ª parcela (a soma bate exato).
