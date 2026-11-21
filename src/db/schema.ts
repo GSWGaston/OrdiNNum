@@ -195,6 +195,8 @@ export const cartao = pgTable(
     faturaAbertaCentavos: centavos(),
     // limite pessoal (opcional): quanto o usuário se permite usar (ex.: limitou no app do banco). Não vem do banco.
     limiteUsuarioCentavos: centavos(),
+    // vencimento da fatura que o usuário marcou como paga (cartão do banco: o pagamento não chega no cartão)
+    faturaPagaVencimento: date(),
     faturaVencimento: date(),
     conexaoId: uuid().references(() => conexaoBanco.id, { onDelete: "set null" }),
     idExterno: text(),

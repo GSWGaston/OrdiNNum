@@ -11,7 +11,7 @@ import { db } from "@/db";
 import { lerReais } from "@/lib/formato";
 import { atualizarCategoria, criarCategoria, excluirCategoria } from "@/lib/dados/categorias";
 import { ErroDados } from "@/lib/dados/comum";
-import { atualizarCartao, criarCartao, excluirCartao, pagarFatura } from "@/lib/dados/cartoes";
+import { atualizarCartao, criarCartao, excluirCartao, marcarFaturaPaga, pagarFatura } from "@/lib/dados/cartoes";
 import { atualizarConta, criarConta, excluirConta, transferir } from "@/lib/dados/contas";
 import {
   atualizarRecorrencia,
@@ -389,6 +389,12 @@ export async function salvarCartao(_: Estado, fd: FormData) {
   const { id: cid, limite, limitePessoal, ...d } = p.data;
   const dados = { ...d, limiteTotalCentavos: limite, limitePessoalCentavos: limitePessoal };
   return rodar((uid) => (cid ? atualizarCartao(db, uid, cid, dados) : criarCartao(db, uid, dados)), "Cartão salvo.");
+}
+
+export async function marcarFaturaPagaAcao(_: Estado, fd: FormData) {
+  const p = z.object({ id, vencimento: z.preprocess(vazioParaNulo, dia.nullable()) }).safeParse(Object.fromEntries(fd));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => marcarFaturaPaga(db, uid, p.data.id, p.data.vencimento), p.data.vencimento ? "Fatura marcada como paga." : "Marcação desfeita.");
 }
 
 export async function removerCartao(_: Estado, fd: FormData) {

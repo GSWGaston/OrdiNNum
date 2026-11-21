@@ -25,6 +25,7 @@ export type CartaoBase = {
   faturaAbertaCentavos?: number | null;
   faturaVencimento?: string | null;
   limitePessoalCentavos?: number | null;
+  faturaPagaVencimento?: string | null;
 };
 
 export type Fatura = { fechamento: string | null; vencimento: string; total: number; aberto: number };
@@ -74,10 +75,13 @@ export function resumoDoCartao(c: CartaoBase, lancamentos: LancamentoCartao[], h
       : 0;
     const aberto = Math.max(0, devido - parcelasFuturas);
     // nem todo banco manda o vencimento: sem ele, usa o dia de vencimento do cartão
-    const vencimento = c.faturaVencimento ?? (hoje ? proximoDia(hoje, c.diaVencimento) : null);
-    const faturas: Fatura[] = aberto > 0 && vencimento ? [{ fechamento: null, vencimento, total: aberto, aberto }] : [];
+    // a data do banco às vezes é da fatura anterior (já vencida e paga): aí vale o próximo vencimento do cartão
+    const doBanco = c.faturaVencimento && (!hoje || c.faturaVencimento >= hoje) ? c.faturaVencimento : null;
+    const vencimento = doBanco ?? (hoje ? proximoDia(hoje, c.diaVencimento) : null);
+    const paga = !!vencimento && c.faturaPagaVencimento === vencimento;
+    const faturas: Fatura[] = aberto > 0 && vencimento && !paga ? [{ fechamento: null, vencimento, total: aberto, aberto }] : [];
     const usoPct = referencia > 0 ? (devido / referencia) * 100 : 0;
-    return { faturas, devido, disponivel: referencia - devido, usoPct, base, parcelasFuturas };
+    return { faturas, devido, disponivel: referencia - devido, usoPct, base, parcelasFuturas, faturaPaga: paga ? { vencimento: vencimento!, valor: aberto } : null };
   }
   const porVencimento = new Map<string, { fechamento: string; vencimento: string; total: number }>();
   let creditos = 0;
@@ -101,5 +105,5 @@ export function resumoDoCartao(c: CartaoBase, lancamentos: LancamentoCartao[], h
   const devido = faturas.reduce((s, f) => s + f.aberto, 0) - creditos;
   const disponivel = referencia - devido;
   const usoPct = referencia > 0 ? (devido / referencia) * 100 : 0;
-  return { faturas, devido, disponivel, usoPct, base: "cartao" as const, parcelasFuturas: 0 };
+  return { faturas, devido, disponivel, usoPct, base: "cartao" as const, parcelasFuturas: 0, faturaPaga: null };
 }

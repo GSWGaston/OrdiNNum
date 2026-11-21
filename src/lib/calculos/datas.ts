@@ -48,6 +48,9 @@ export const hoje = (agora = new Date()) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(agora);
 
 const NOMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+/** "2026-12-07" ou "2026-12" -> "dezembro" */
+export const mesPorExtenso = (data: string) => NOMES[Number(data.slice(5, 7)) - 1]!;
+
 export const nomeDoMes = (mes: string) => {
   const n = NOMES[Number(mes.slice(5)) - 1]!;
   return `${n[0]!.toUpperCase()}${n.slice(1)} de ${mes.slice(0, 4)}`;

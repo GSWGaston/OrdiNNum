@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { cartao, link, titulo } from "@/components/estilos";
+import { marcarFaturaPagaAcao } from "@/app/acoes";
+import { Enviar, Form } from "@/components/form";
 import { GastoDiario } from "@/components/gasto-diario";
 import { FAIXA } from "@/components/credito";
 import { BarraObjetivo } from "@/components/objetivos";
@@ -12,7 +14,7 @@ import { resumoCredito } from "@/lib/dados/credito";
 import { listarObjetivos } from "@/lib/dados/objetivos";
 import { Valor, Vazio } from "@/components/ui";
 import { db } from "@/db";
-import { hoje, limitesDoMes, mesValido, nomeDoMes, somarDias, somarMesesAoMes } from "@/lib/calculos/datas";
+import { hoje, limitesDoMes, mesPorExtenso, mesValido, nomeDoMes, somarDias, somarMesesAoMes } from "@/lib/calculos/datas";
 import { despesasPorCategoria, previstosAte, resumoDoMes } from "@/lib/calculos/resumo";
 import { listarCartoes } from "@/lib/dados/cartoes";
 import { listarCategorias } from "@/lib/dados/categorias";
@@ -48,7 +50,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   // por cartão, a próxima fatura em aberto (o valor do mês, não o total parcelado)
   const faturasAPagar = (credito?.cartoes ?? []).flatMap((c) => {
     const f = c.faturas.find((x) => x.aberto > 0);
-    return f ? [{ cartao: c.nome, vencimento: f.vencimento, aberto: f.aberto }] : [];
+    return f ? [{ id: c.id, cartao: c.nome, vencimento: f.vencimento, aberto: f.aberto, doBanco: c.limiteDisponivelCentavos !== null }] : [];
   });
 
   if (!contas.length)
@@ -66,7 +68,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   const faturas = cartoes.flatMap((c) =>
     c.faturas
       .filter((f) => f.aberto > 0)
-      .map((f) => ({ id: `${c.id}-${f.vencimento}`, descricao: `Fatura ${c.nome}`, data: f.vencimento, valorCentavos: -f.aberto })),
+      .map((f) => ({ id: `${c.id}-${f.vencimento}`, descricao: `Fatura ${c.nome} de ${mesPorExtenso(f.vencimento)}`, data: f.vencimento, valorCentavos: -f.aberto })),
   );
   const aPagarAte = (ate: string) =>
     [...previstosAte(recorrencias, ate), ...faturas.filter((f) => f.data <= ate)].sort((a, b) => a.data.localeCompare(b.data));
@@ -104,12 +106,23 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
               {faturasAPagar.map((f) => (
-                <li key={f.cartao} className="flex justify-between gap-2">
+                <li key={f.id} className="flex flex-wrap items-center justify-between gap-x-2">
                   <span>
-                    💳 {f.cartao} <span className="text-zinc-600 dark:text-zinc-400">· vence {formatarData(f.vencimento)}</span>
+                    💳 {f.cartao} <span className="text-zinc-600 dark:text-zinc-400">· {mesPorExtenso(f.vencimento)}, vence {formatarData(f.vencimento)}</span>
                     {f.vencimento < dia && <strong className="ml-1 text-red-700 dark:text-red-400">(vencida)</strong>}
                   </span>
-                  <span className="tabular">{formatarReais(f.aberto)}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="tabular">{formatarReais(f.aberto)}</span>
+                    {f.doBanco && (
+                      <Form action={marcarFaturaPagaAcao}>
+                        <input type="hidden" name="id" value={f.id} />
+                        <input type="hidden" name="vencimento" value={f.vencimento} />
+                        <Enviar className="text-xs underline" confirmar={`Marcar a fatura de ${mesPorExtenso(f.vencimento)} do ${f.cartao} como paga?`}>
+                          marcar paga
+                        </Enviar>
+                      </Form>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>

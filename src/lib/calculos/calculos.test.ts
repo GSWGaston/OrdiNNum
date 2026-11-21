@@ -150,6 +150,12 @@ describe("cartão", () => {
     const parcela = (data: string, n: number) => ({ data, valorCentavos: -15664, descricao: `LOJA ${n}/8`, parcelaAtual: n, parcelasTotal: 8 });
     const mp = { ...c, diaVencimento: 17, limiteTotalCentavos: 330000, limiteDisponivelCentavos: 330000 - 15664 * 6, faturaAbertaCentavos: 27048, faturaVencimento: "2026-12-17" };
     expect(resumoDoCartao(mp, [parcela("2026-10-12", 2), parcela("2026-11-12", 3)], "2026-11-21").faturas[0]!.aberto).toBe(15664);
+    // data do banco já passou (fatura anterior): vale o próximo vencimento do cartão (caso real Inter, 07/11 visto em 21/11)
+    expect(resumoDoCartao({ ...inter, faturaVencimento: "2026-11-07" }, compras, "2026-11-21").faturas[0]!.vencimento).toBe("2026-12-07");
+    // marcada como paga: some das faturas a pagar
+    const paga = resumoDoCartao({ ...inter, faturaPagaVencimento: "2026-12-07" }, compras, "2026-11-21");
+    expect(paga.faturas).toEqual([]);
+    expect(paga.faturaPaga).toEqual({ vencimento: "2026-12-07", valor: 35010 });
     expect(proximoDia("2026-11-05", 10)).toBe("2026-11-10");
     expect(proximoDia("2026-11-10", 10)).toBe("2026-11-10");
     expect(proximoDia("2027-01-31", 31)).toBe("2027-01-31");

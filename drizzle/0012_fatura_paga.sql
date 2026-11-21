@@ -1,0 +1,1 @@
+ALTER TABLE "cartao" ADD COLUMN "fatura_paga_vencimento" date;

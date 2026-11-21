@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { pagarFaturaAcao, removerCartao, removerConta, salvarCartao, salvarConta, transferirAcao } from "@/app/acoes";
+import { marcarFaturaPagaAcao, pagarFaturaAcao, removerCartao, removerConta, salvarCartao, salvarConta, transferirAcao } from "@/app/acoes";
 import { botaoPerigo, botaoSecundario, campo, cartao, link, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
 import { SelectConta, TIPOS_CONTA, Valor } from "@/components/ui";
 import { db } from "@/db";
-import { hoje } from "@/lib/calculos/datas";
+import { hoje, mesPorExtenso } from "@/lib/calculos/datas";
 import { listarCartoes } from "@/lib/dados/cartoes";
 import { listarContas } from "@/lib/dados/contas";
 import { centavosParaTexto, formatarData, formatarReais } from "@/lib/formato";
@@ -310,6 +310,23 @@ export default async function Contas() {
                   </details>
                 )}
 
+                {c.limiteDisponivelCentavos !== null && (aPagar || c.faturaPaga) && (
+                  <Form action={marcarFaturaPagaAcao} className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                    <input type="hidden" name="id" value={c.id} />
+                    {c.faturaPaga ? (
+                      <>
+                        <span>✓ Fatura de {mesPorExtenso(c.faturaPaga.vencimento)} marcada como paga.</span>
+                        <input type="hidden" name="vencimento" value="" />
+                        <Enviar className={botaoSecundario}>Desfazer</Enviar>
+                      </>
+                    ) : (
+                      <>
+                        <input type="hidden" name="vencimento" value={aPagar!.vencimento} />
+                        <Enviar className={botaoSecundario}>Marcar fatura de {mesPorExtenso(aPagar!.vencimento)} como paga</Enviar>
+                      </>
+                    )}
+                  </Form>
+                )}
                 {aPagar && contas.length > 0 && c.limiteDisponivelCentavos === null && (
                   <Form action={pagarFaturaAcao} className="mt-3 flex flex-wrap items-end gap-2">
                     <input type="hidden" name="cartaoId" value={c.id} />

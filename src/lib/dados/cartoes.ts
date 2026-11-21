@@ -54,6 +54,13 @@ export async function atualizarCartao(db: Db, uid: string, id: string, d: DadosC
     .where(and(dono, isNotNull(cartao.conexaoId)));
 }
 
+/** Marca (ou desmarca, com null) como paga a fatura que vence em `vencimento`. Só cartão do banco. */
+export const marcarFaturaPaga = (db: Db, uid: string, id: string, vencimento: string | null) =>
+  db
+    .update(cartao)
+    .set({ faturaPagaVencimento: vencimento })
+    .where(and(eq(cartao.id, id), eq(cartao.usuarioId, uid), isNotNull(cartao.conexaoId)));
+
 export const excluirCartao = (db: Db, uid: string, id: string) =>
   db.delete(cartao).where(and(eq(cartao.id, id), eq(cartao.usuarioId, uid)));
 
