@@ -4,6 +4,7 @@ import { cartao, transacao } from "@/db/schema";
 import { resumoDoCartao } from "@/lib/calculos/cartao";
 import { hoje } from "@/lib/calculos/datas";
 import { cartaoDoUsuario, contaDoUsuario } from "./comum";
+import { categorizarPagamentosDeFatura } from "./transferencias";
 
 export type DadosCartao = {
   nome: string;
@@ -77,5 +78,6 @@ export function pagarFatura(db: Db, uid: string, d: { cartaoId: string; contaId:
       { ...base, contaId: d.contaId, valorCentavos: -Math.abs(d.valorCentavos) },
       { ...base, cartaoId: d.cartaoId, valorCentavos: Math.abs(d.valorCentavos) },
     ]);
+    await categorizarPagamentosDeFatura(tx, uid);
   });
 }

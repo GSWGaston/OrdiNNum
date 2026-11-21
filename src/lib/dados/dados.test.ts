@@ -560,9 +560,22 @@ describe("transferências entre contas próprias", () => {
     ts = await listarTransacoes(db, u.uid, { mes: "2026-11" });
     expect(ts.every((t) => !t.transferenciaId)).toBe(true);
 
-    await marcarComoTransferencia(db, u.uid, ts[0]!.id);
+    // com uma categoria "Fatura", o pagamento de fatura (par que toca o cartão) ganha ela nos dois lados
+    await criarCategoria(db, u.uid, { nome: "Fatura", tipo: "despesa", cor: "#0ea5e9", paiId: null });
+    await criarCategoria(db, outro.uid, { nome: "Fatura", tipo: "despesa", cor: "#0ea5e9", paiId: null });
+    await criarTransacao(db, u.uid, { ...base, contaId: u.conta.id, cartaoId: null, data: "2026-11-20", valorCentavos: -9999, descricao: "Pix fatura" });
+    await criarTransacao(db, u.uid, { ...base, contaId: null, cartaoId: u.cartao.id, data: "2026-11-20", valorCentavos: 9999, descricao: "Pagamento" });
+    await detectarTransferencias(db, u.uid, "2026-11-15");
+    const fatura = (await listarCategorias(db, u.uid)).find((c) => c.nome === "Fatura")!;
+    const pagos = (await listarTransacoes(db, u.uid, { mes: "2026-11" })).filter((t) => t.valorCentavos === 9999 || t.valorCentavos === -9999);
+    expect(pagos.map((t) => t.categoriaId)).toEqual([fatura.id, fatura.id]);
+    expect((await listarTransacoes(db, outro.uid, { mes: "2026-11" })).every((t) => t.categoriaId === null)).toBe(true);
+    ts = (await listarTransacoes(db, u.uid, { mes: "2026-11" })).filter((t) => Math.abs(t.valorCentavos) === 20451);
+
+    const marcado = ts[0]!.id;
+    await marcarComoTransferencia(db, u.uid, marcado);
     await marcarComoTransferencia(db, outro.uid, ts[1]!.id); // não é dele
     ts = await listarTransacoes(db, u.uid, { mes: "2026-11" });
-    expect(ts.filter((t) => t.transferenciaId).map((t) => t.id)).toEqual([ts[0]!.id]);
+    expect(ts.filter((t) => Math.abs(t.valorCentavos) === 20451 && t.transferenciaId).map((t) => t.id)).toEqual([marcado]);
   });
 });
