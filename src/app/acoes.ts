@@ -1,0 +1,227 @@
+"use server";
+
+import bcrypt from "bcryptjs";
+import { AuthError } from "next-auth";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { signIn, signOut } from "@/auth";
+import { db } from "@/db";
+import { lerReais } from "@/lib/formato";
+import { atualizarCategoria, criarCategoria, excluirCategoria } from "@/lib/dados/categorias";
+import { ErroDados } from "@/lib/dados/comum";
+import { atualizarConta, criarConta, excluirConta } from "@/lib/dados/contas";
+import { criarRecorrencia, excluirRecorrencia, lancarRecorrencia } from "@/lib/dados/recorrencias";
+import {
+  atualizarTransacao,
+  categorizarEmLote,
+  criarTransacao,
+  excluirParcelamento,
+  excluirTransacao,
+} from "@/lib/dados/transacoes";
+import { buscarPorEmail, criarUsuario, excluirUsuario } from "@/lib/dados/usuarios";
+import type { Estado } from "@/lib/estado";
+import { exigirUsuario } from "@/lib/sessao";
+
+z.config(z.locales.pt());
+
+// ---------- validação (fronteira de confiança: tudo que vem do navegador passa por aqui) ----------
+
+const vazioParaNulo = (v: unknown) => (v === "" || v === undefined ? null : v);
+const id = z.uuid({ error: "Registro inválido." });
+const idOpcional = z.preprocess(vazioParaNulo, z.uuid().nullable());
+const valor = z
+  .string()
+  .transform(lerReais)
+  .pipe(z.number({ error: "Valor inválido. Use o formato 1.234,56." }).int().positive("Informe um valor maior que zero.").max(1e11));
+const dia = z.iso.date({ error: "Data inválida." });
+const texto = (max: number) => z.string().trim().max(max);
+const tipo = z.enum(["despesa", "receita"]);
+const cor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Cor inválida.");
+
+const comSinal = (t: "despesa" | "receita", v: number) => (t === "despesa" ? -v : v);
+
+const lancamento = z.object({
+  tipo,
+  valor,
+  data: dia,
+  contaId: z.uuid({ error: "Escolha uma conta." }),
+  categoriaId: idOpcional,
+  descricao: texto(200).default(""),
+  observacao: z.preprocess(vazioParaNulo, texto(1000).nullable()).default(null),
+});
+
+function ler<T extends z.ZodType>(schema: T, fd: FormData) {
+  return schema.safeParse(Object.fromEntries(fd));
+}
+const msg = (e: z.ZodError) => e.issues[0]?.message ?? "Dados inválidos.";
+
+async function rodar(fn: (uid: string) => Promise<unknown>, ok = "Salvo."): Promise<Estado> {
+  const uid = await exigirUsuario();
+  try {
+    await fn(uid);
+  } catch (e) {
+    if (e instanceof ErroDados) return { erro: e.message };
+    throw e;
+  }
+  revalidatePath("/", "layout");
+  return { ok };
+}
+
+// ---------- autenticação ----------
+
+const cadastro = z.object({
+  nome: texto(100).min(1, "Informe seu nome."),
+  email: z.email("E-mail inválido.").max(200),
+  senha: z.string().min(8, "A senha precisa de pelo menos 8 caracteres.").max(200),
+});
+
+export async function cadastrar(_: Estado, fd: FormData): Promise<Estado> {
+  const p = ler(cadastro, fd);
+  if (!p.success) return { erro: msg(p.error) };
+  const email = p.data.email.toLowerCase();
+  if (await buscarPorEmail(db, email)) return { erro: "Este e-mail já tem cadastro." };
+  await criarUsuario(db, { nome: p.data.nome, email, senhaHash: await bcrypt.hash(p.data.senha, 12) });
+  await signIn("credentials", { email, senha: p.data.senha, redirectTo: "/" });
+  return null;
+}
+
+export async function entrar(_: Estado, fd: FormData): Promise<Estado> {
+  try {
+    await signIn("credentials", { email: fd.get("email"), senha: fd.get("senha"), redirectTo: "/" });
+  } catch (e) {
+    if (e instanceof AuthError) return { erro: "E-mail ou senha inválidos." };
+    throw e; // inclui o redirect de sucesso
+  }
+  return null;
+}
+
+export async function sair() {
+  await signOut({ redirectTo: "/entrar" });
+}
+
+export async function excluirMinhaConta(_: Estado, fd: FormData): Promise<Estado> {
+  const uid = await exigirUsuario();
+  if (fd.get("confirmacao") !== "EXCLUIR") return { erro: 'Digite EXCLUIR para confirmar.' };
+  await excluirUsuario(db, uid);
+  await signOut({ redirectTo: "/entrar" });
+  return null;
+}
+
+// ---------- contas ----------
+
+const contaForm = z.object({
+  id: idOpcional,
+  nome: texto(80).min(1, "Informe o nome da conta."),
+  tipo: z.enum(["corrente", "poupanca", "dinheiro", "vale", "investimento"]),
+  saldo: z.string().transform((s) => (s.trim() === "" ? 0 : lerReais(s))).pipe(z.number({ error: "Saldo inválido." }).int()),
+});
+
+export async function salvarConta(_: Estado, fd: FormData) {
+  const p = ler(contaForm, fd);
+  if (!p.success) return { erro: msg(p.error) };
+  const { id: contaId, saldo, ...d } = p.data;
+  const dados = { ...d, saldoCentavos: saldo };
+  return rodar((uid) => (contaId ? atualizarConta(db, uid, contaId, dados) : criarConta(db, uid, dados)), "Conta salva.");
+}
+
+export async function removerConta(_: Estado, fd: FormData) {
+  const p = id.safeParse(fd.get("id"));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => excluirConta(db, uid, p.data), "Conta excluída.");
+}
+
+// ---------- lançamentos ----------
+
+export async function novoLancamento(_: Estado, fd: FormData): Promise<Estado> {
+  const p = ler(
+    lancamento.extend({ parcelas: z.preprocess((v) => v || undefined, z.coerce.number().int().min(1).max(120).optional()) }),
+    fd,
+  );
+  if (!p.success) return { erro: msg(p.error) };
+  const { tipo: t, valor: v, parcelas, ...d } = p.data;
+  const r = await rodar((uid) => criarTransacao(db, uid, { ...d, valorCentavos: comSinal(t, v), parcelas: parcelas ?? 1 }));
+  if (r?.erro) return r;
+  redirect(fd.get("continuar") ? "/lancamentos/novo?salvo=1" : "/");
+}
+
+export async function editarLancamento(_: Estado, fd: FormData) {
+  const p = ler(lancamento.extend({ id }), fd);
+  if (!p.success) return { erro: msg(p.error) };
+  const { id: tid, tipo: t, valor: v, ...d } = p.data;
+  return rodar((uid) => atualizarTransacao(db, uid, tid, { ...d, valorCentavos: comSinal(t, v) }));
+}
+
+export async function removerLancamento(_: Estado, fd: FormData) {
+  const p = z.object({ id: idOpcional, grupo: idOpcional }).safeParse(Object.fromEntries(fd));
+  if (!p.success) return { erro: msg(p.error) };
+  const { id: tid, grupo } = p.data;
+  return rodar(async (uid) => {
+    if (grupo) await excluirParcelamento(db, uid, grupo);
+    else if (tid) await excluirTransacao(db, uid, tid);
+  }, "Excluído.");
+}
+
+export async function categorizarLote(_: Estado, fd: FormData) {
+  const p = z.object({ ids: z.array(id).min(1, "Marque ao menos um lançamento."), categoriaId: idOpcional }).safeParse({
+    ids: fd.getAll("ids"),
+    categoriaId: fd.get("categoriaId"),
+  });
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => categorizarEmLote(db, uid, p.data.ids, p.data.categoriaId), `${p.data.ids.length} lançamento(s) categorizado(s).`);
+}
+
+// ---------- categorias ----------
+
+export async function salvarCategoria(_: Estado, fd: FormData) {
+  const p = ler(z.object({ nome: texto(60).min(1, "Informe o nome."), tipo, cor, paiId: idOpcional }), fd);
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => criarCategoria(db, uid, p.data), "Categoria criada.");
+}
+
+export async function editarCategoria(_: Estado, fd: FormData) {
+  const p = ler(z.object({ id, nome: texto(60).min(1, "Informe o nome."), cor }), fd);
+  if (!p.success) return { erro: msg(p.error) };
+  const { id: cid, ...d } = p.data;
+  return rodar((uid) => atualizarCategoria(db, uid, cid, d));
+}
+
+export async function removerCategoria(_: Estado, fd: FormData) {
+  const p = id.safeParse(fd.get("id"));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => excluirCategoria(db, uid, p.data), "Categoria excluída.");
+}
+
+// ---------- recorrências ----------
+
+export async function salvarRecorrencia(_: Estado, fd: FormData) {
+  const p = ler(
+    z.object({
+      tipo,
+      valor,
+      descricao: texto(200).min(1, "Informe a descrição."),
+      periodicidade: z.enum(["semanal", "mensal", "anual"]),
+      proximaData: dia,
+      contaId: z.uuid({ error: "Escolha uma conta." }),
+      categoriaId: idOpcional,
+    }),
+    fd,
+  );
+  if (!p.success) return { erro: msg(p.error) };
+  const { tipo: t, valor: v, ...d } = p.data;
+  return rodar((uid) => criarRecorrencia(db, uid, { ...d, valorCentavos: comSinal(t, v) }), "Recorrência criada.");
+}
+
+export async function removerRecorrencia(_: Estado, fd: FormData) {
+  const p = id.safeParse(fd.get("id"));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => excluirRecorrencia(db, uid, p.data), "Recorrência excluída.");
+}
+
+export async function lancarRecorrenciaAcao(_: Estado, fd: FormData) {
+  const p = z
+    .object({ id, valor: z.preprocess((v) => v || undefined, valor.optional()) })
+    .safeParse(Object.fromEntries(fd));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => lancarRecorrencia(db, uid, p.data.id, p.data.valor), "Lançado.");
+}
