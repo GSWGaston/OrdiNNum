@@ -26,6 +26,7 @@ import {
   excluirTransacao,
   listarTransacoes,
 } from "./transacoes";
+import { definirMeta, gastoDiarioDoUsuario, metaVigente } from "./metas";
 import { limparFalhas, loginBloqueado, MAX_FALHAS, registrarFalha } from "./tentativas";
 import { criarUsuario, excluirUsuario, exportarDados } from "./usuarios";
 import { resumoDoMes } from "@/lib/calculos/resumo";
@@ -143,7 +144,7 @@ describe("isolamento entre usuários", () => {
   it("excluir a conta do usuário apaga todos os dados dele e só dele", async () => {
     await excluirUsuario(db, b.uid);
     const e = await exportarDados(db, b.uid);
-    expect(e).toEqual({ usuario: undefined, contas: [], cartoes: [], categorias: [], recorrencias: [], transacoes: [] });
+    expect(e).toEqual({ usuario: undefined, contas: [], cartoes: [], categorias: [], recorrencias: [], metas: [], transacoes: [] });
     expect(await listarContas(db, a.uid, "2026-12-31")).toHaveLength(1);
   });
 });
@@ -269,5 +270,29 @@ describe("limite de tentativas de login", () => {
     expect(await loginBloqueado(db, "alvo@exemplo.test", min(30))).toBe(false); // janela passou
     await limparFalhas(db, "alvo@exemplo.test");
     expect(await loginBloqueado(db, "alvo@exemplo.test", min(6))).toBe(false);
+  });
+});
+
+describe("meta do mês e gasto diário", () => {
+  it("meta herda do mês anterior, é isolada por usuário e alimenta o gasto diário", async () => {
+    const u = await novoUsuario("meta@exemplo.test"); // conta corrente R$ 1.000 de abertura, cartão fecha 3
+    const outro = await novoUsuario("meta-outro@exemplo.test");
+    expect(await gastoDiarioDoUsuario(db, u.uid, "2026-11-21")).toBeNull(); // sem meta, sem cálculo
+
+    await definirMeta(db, u.uid, "2026-10", { modo: "saldo_final", valorCentavos: 20000 });
+    expect(await metaVigente(db, u.uid, "2026-11")).toEqual({ modo: "saldo_final", valorCentavos: 20000, herdada: true });
+    await definirMeta(db, u.uid, "2026-11", { modo: "saldo_final", valorCentavos: 10000 });
+    await definirMeta(db, u.uid, "2026-11", { modo: "saldo_final", valorCentavos: 30000 }); // substitui
+    expect(await metaVigente(db, u.uid, "2026-11")).toEqual({ modo: "saldo_final", valorCentavos: 30000, herdada: false });
+    expect(await metaVigente(db, outro.uid, "2026-11")).toBeNull();
+
+    // compra no cartão hoje: R$ 100
+    await criarTransacao(db, u.uid, { contaId: null, cartaoId: u.cartao.id, categoriaId: null, data: "2026-11-21", valorCentavos: -10000, descricao: "x", observacao: null, parcelas: 1 });
+    // compra no cartão de outro usuário não pode entrar na conta de u
+    await criarTransacao(db, outro.uid, { contaId: null, cartaoId: outro.cartao.id, categoriaId: null, data: "2026-11-21", valorCentavos: -99900, descricao: "y", observacao: null, parcelas: 1 });
+
+    const r = await gastoDiarioDoUsuario(db, u.uid, "2026-11-21");
+    // saldo 1.000 - dívida 100 - meta 300 = 600; limite de hoje = (600 + 100 gastos hoje) / 10 dias = 70
+    expect(r).toMatchObject({ disponivel: 60000, limiteHoje: 7000, gastoHoje: 10000, restanteHoje: -3000, estado: "estourado" });
   });
 });

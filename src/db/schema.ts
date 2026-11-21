@@ -11,6 +11,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -95,6 +96,20 @@ export const recorrencia = pgTable(
       .references(() => conta.id, { onDelete: "cascade" }),
   },
   (t) => [index().on(t.usuarioId)],
+);
+
+export const modoMeta = pgEnum("modo_meta", ["economizar", "saldo_final"]);
+
+export const metaMensal = pgTable(
+  "meta_mensal",
+  {
+    id: id(),
+    usuarioId: dono(),
+    mes: text().notNull(), // AAAA-MM
+    modo: modoMeta().notNull(),
+    valorCentavos: centavos().notNull(),
+  },
+  (t) => [unique().on(t.usuarioId, t.mes)],
 );
 
 export const cartao = pgTable(

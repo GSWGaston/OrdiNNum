@@ -29,6 +29,13 @@
       "when": 1795282967759,
       "tag": "0003_tentativa_login",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795285150545,
+      "tag": "0004_meta_mensal",
+      "breakpoints": true
     }
   ]
 }

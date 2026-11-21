@@ -105,3 +105,24 @@ test("login bloqueia depois de 5 senhas erradas", async ({ page }) => {
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByText(/Muitas tentativas erradas/)).toBeVisible();
 });
+
+test("meta do mês: painel mostra o gasto diário e ele muda a cada lançamento", async ({ page }) => {
+  await cadastrar(page);
+  await criarConta(page, "Conta Meta", "3.000,00");
+  await page.goto("/");
+  await page.getByRole("link", { name: "Definir minha meta" }).click();
+  await page.getByText("Quero terminar o mês com").click();
+  await page.getByLabel("Valor (R$)").fill("500");
+  await page.getByRole("button", { name: "Salvar meta" }).click();
+  await expect(page.getByText("Meta salva.")).toBeVisible();
+
+  await page.goto("/");
+  const valor = async () => Number((await page.getByTestId("gasto-diario").innerText()).replace(/[^\d,]/g, "").replace(",", "."));
+  const antes = await valor();
+  expect(antes).toBeGreaterThan(0);
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
+  await page.getByLabel("Valor (R$)").fill("10");
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect.poll(valor).toBeCloseTo(antes - 10, 2);
+});

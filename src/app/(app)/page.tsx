@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cartao, link, titulo } from "@/components/estilos";
+import { GastoDiario } from "@/components/gasto-diario";
 import { Valor, Vazio } from "@/components/ui";
 import { db } from "@/db";
 import { hoje, limitesDoMes, mesValido, nomeDoMes, somarDias, somarMesesAoMes } from "@/lib/calculos/datas";
@@ -7,6 +8,7 @@ import { despesasPorCategoria, previstosAte, resumoDoMes } from "@/lib/calculos/
 import { listarCartoes } from "@/lib/dados/cartoes";
 import { listarCategorias } from "@/lib/dados/categorias";
 import { listarContas } from "@/lib/dados/contas";
+import { gastoDiarioDoUsuario } from "@/lib/dados/metas";
 import { listarRecorrencias } from "@/lib/dados/recorrencias";
 import { listarTransacoes } from "@/lib/dados/transacoes";
 import { formatarData, formatarReais } from "@/lib/formato";
@@ -20,12 +22,14 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   const mes = mesValido(mesParam) ? mesParam : mesAtual;
   const { fim } = limitesDoMes(mes);
 
-  const [contas, cartoes, lancamentos, recorrencias, categorias] = await Promise.all([
+  const ehMesAtual = mes === mesAtual;
+  const [contas, cartoes, lancamentos, recorrencias, categorias, gastoDoDia] = await Promise.all([
     listarContas(db, uid, dia),
     listarCartoes(db, uid),
     listarTransacoes(db, uid, { mes }),
     listarRecorrencias(db, uid),
     listarCategorias(db, uid),
+    ehMesAtual ? gastoDiarioDoUsuario(db, uid, dia) : null,
   ]);
 
   if (!contas.length)
@@ -39,7 +43,6 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
     );
 
   const saldoAtual = contas.reduce((s, c) => s + c.saldoAtual, 0);
-  const ehMesAtual = mes === mesAtual;
   // faturas abertas entram como compromisso a pagar (a compra já foi despesa no dia em que foi feita)
   const faturas = cartoes.flatMap((c) =>
     c.faturas
@@ -56,6 +59,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
 
   return (
     <>
+      {ehMesAtual && <GastoDiario dados={gastoDoDia} />}
       <nav aria-label="Mês" className="flex items-center justify-between">
         <Link href={`/?mes=${somarMesesAoMes(mes, -1)}`} className={link} aria-label="Mês anterior">
           ‹ anterior

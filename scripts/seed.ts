@@ -7,6 +7,7 @@ import { db } from "../src/db";
 import { hoje, limitesDoMes, somarMesesAoMes } from "../src/lib/calculos/datas";
 import { criarCartao, listarCartoes, pagarFatura } from "../src/lib/dados/cartoes";
 import { listarCategorias } from "../src/lib/dados/categorias";
+import { definirMeta } from "../src/lib/dados/metas";
 import { criarConta, listarContas } from "../src/lib/dados/contas";
 import { criarRecorrencia } from "../src/lib/dados/recorrencias";
 import { criarTransacao } from "../src/lib/dados/transacoes";
@@ -70,6 +71,8 @@ async function main() {
   await criarRecorrencia(db, uid, { descricao: "[exemplo] Aluguel", valorCentavos: -180000, periodicidade: "mensal", proximaData: d(mes, 10), contaId: corrente!.id, categoriaId: cat.get("Aluguel") ?? null, automatica: true });
   await criarRecorrencia(db, uid, { descricao: "[exemplo] Salário", valorCentavos: 650000, periodicidade: "mensal", proximaData: d(prox, 5), contaId: corrente!.id, categoriaId: cat.get("Salário") ?? null, automatica: true });
   await criarRecorrencia(db, uid, { descricao: "[exemplo] Academia", valorCentavos: -11990, periodicidade: "mensal", proximaData: d(mes, 25), contaId: corrente!.id, categoriaId: cat.get("Saúde") ?? null });
+
+  await definirMeta(db, uid, mes, { modo: "economizar", valorCentavos: 50000 });
 
   console.log(`Seed pronto: ${EMAIL} / ${SENHA} (dados fictícios)`);
 }

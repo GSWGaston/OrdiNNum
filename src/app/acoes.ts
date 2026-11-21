@@ -29,6 +29,7 @@ import {
   excluirTransacao,
 } from "@/lib/dados/transacoes";
 import { buscarPorEmail, criarUsuario, excluirUsuario } from "@/lib/dados/usuarios";
+import { definirMeta } from "@/lib/dados/metas";
 import { JANELA_MIN } from "@/lib/dados/tentativas";
 import type { Estado } from "@/lib/estado";
 import { exigirUsuario } from "@/lib/sessao";
@@ -142,6 +143,23 @@ export async function definirTema(_: Estado, fd: FormData): Promise<Estado> {
   else c.set("tema", p.data, { maxAge: 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: true, secure: process.env.NODE_ENV === "production" });
   revalidatePath("/", "layout");
   return { ok: "Tema aplicado." };
+}
+
+// ---------- meta do mês ----------
+
+export async function salvarMeta(_: Estado, fd: FormData) {
+  const p = ler(
+    z.object({
+      mes: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Mês inválido."),
+      modo: z.enum(["economizar", "saldo_final"], { error: "Escolha o tipo de meta." }),
+      // meta zero é válida ("terminar com R$ 0"), por isso não usa o `valor` (que exige > 0)
+      valor: z.string().transform(lerReais).pipe(z.number({ error: "Valor inválido. Use o formato 1.234,56." }).int().min(0).max(1e11)),
+    }),
+    fd,
+  );
+  if (!p.success) return { erro: msg(p.error) };
+  const { mes, modo, valor: v } = p.data;
+  return rodar((uid) => definirMeta(db, uid, mes, { modo, valorCentavos: v }), "Meta salva.");
 }
 
 // ---------- contas ----------

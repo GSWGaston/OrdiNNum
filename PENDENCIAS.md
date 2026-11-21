@@ -44,6 +44,21 @@ Comparação da Fase 1 entregue com a especificação (PDF) e o prompt. Cada ite
 - **Fase 3, Open Finance:** `BankProvider` + `PluggyProvider` + `FakeProvider`, sandbox Pluggy e Meu Pluggy, importação sem duplicar, regras de categorização, job periódico (Vercel Cron), consentimentos/revogação, perguntar se mantém histórico ao apagar conexão, tokens criptografados, alertas.
 - **Fase 4, inteligência:** gráficos (Recharts), evolução do patrimônio, comparativos, relatório PDF/CSV mensal, detecção de assinaturas, simulador, 2FA.
 
+## F. Fase 2 (andamento)
+
+| # | Bloco | Situação |
+| --- | --- | --- |
+| F1 | Meta do mês + gasto diário sugerido | **Feito.** Tela "Meta", destaque no painel, "de onde vem o número". |
+| F2 | Orçamento por categoria (alertas 80%/100%) | A fazer |
+| F3 | Crédito consolidado (medidor com faixas, tela Crédito, parcelas futuras por mês) | A fazer |
+| F4 | Objetivos (aporte mensal, data estimada, status) | A fazer |
+
+## G. Ideias anotadas para depois
+
+| # | Ideia | Fase sugerida |
+| --- | --- | --- |
+| G1 | Subir o contracheque (PDF/foto): mostrar bruto, descontos (INSS, IR, VT, plano, consignado) e líquido, mês a mês. Complementa o Open Finance, que só vê o líquido que caiu. Precisa de leitura por IA/OCR e cuidado de privacidade (CPF, salário). | 4 |
+
 ## E. Decisões em aberto com você (do prompt)
 
 | # | Decisão |

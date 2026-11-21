@@ -105,6 +105,14 @@ As demais do modelo (metas, orçamento, objetivos, conexões, regras) entram nas
 - **Pagamento de fatura = transferência**: par de lançamentos ligados por `transferencia_id` (sai da conta, entra no
   cartão), fora de receitas/despesas. Não se edita; excluir uma ponta exclui as duas. Transferência entre contas
   próprias (Contas → "Transferir entre contas") usa o mesmo par.
+- **Gasto diário** (`src/lib/calculos/gastoDiario.ts`): Disp = receitas a entrar + saldo − fixas a pagar − alvo;
+  limite de hoje = (Disp + gasto variável de hoje) / dias restantes (inclui hoje), então o número de hoje não muda
+  enquanto você gasta: o que muda é o "ainda pode". Saldo = contas exceto investimento. Fixas = recorrências de
+  despesa pendentes + saídas futuras do mês + dívida dos cartões até o fim do mês (compra no cartão conta no dia).
+  Gasto variável = saída que não é transferência, recorrência nem parcela 2+.
+  **Interpretação da spec**: lida ao pé da letra, a fórmula de "economizar X" ficaria igual à de "terminar com Y".
+  Adotei: economizar X → alvo = saldo no início do mês + X (menos o que já foi transferido para investimento no mês);
+  terminar com Y → alvo = Y. A meta vale para os meses seguintes até ser trocada.
 - **Transação ganhou `observacao`** (o módulo Lançamentos da especificação cita "observação").
 - **Categorias padrão** criadas no cadastro (Moradia > Aluguel, Luz, Água, Internet etc.).
 - **Fuso fixo America/Sao_Paulo** para "hoje".
