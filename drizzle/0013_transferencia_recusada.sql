@@ -1,0 +1,1 @@
+ALTER TABLE "transacao" ADD COLUMN "transferencia_recusada" boolean DEFAULT false NOT NULL;

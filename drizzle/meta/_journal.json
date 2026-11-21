@@ -92,6 +92,13 @@
       "when": 1795295268462,
       "tag": "0012_fatura_paga",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795297510289,
+      "tag": "0013_transferencia_recusada",
+      "breakpoints": true
     }
   ]
 }

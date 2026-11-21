@@ -8,6 +8,7 @@ import { categorizar } from "@/lib/calculos/regras";
 import { cifrar, decifrar } from "@/lib/cripto";
 import { ErroDados } from "./comum";
 import { listarRegras } from "./regras";
+import { detectarTransferencias } from "./transferencias";
 
 /** Conexões do usuário, sem o id do item (que fica só no servidor, criptografado). */
 export const listarConexoes = (db: Db, uid: string) =>
@@ -171,6 +172,8 @@ export async function sincronizarConexao(db: Db, uid: string, conexaoId: string,
         .set({ banco: item.banco, status: item.status, erro: item.erro, consentimentoAte: item.consentimentoAte, ultimaSincronizacao: agora })
         .where(eq(conexaoBanco.id, conexaoId));
     });
+    // Pix entre contas próprias / pagamento de fatura visto dos dois lados: vira transferência
+    await detectarTransferencias(db, uid, desde);
     return { contas: contasBanco.length, transacoes: importadas };
   } catch (e) {
     // a mensagem é nossa (sem token nem corpo de resposta do agregador)

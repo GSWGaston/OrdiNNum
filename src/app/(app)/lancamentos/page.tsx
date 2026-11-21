@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { categorizarLote, editarLancamento, removerLancamento } from "@/app/acoes";
+import { categorizarLote, editarLancamento, marcarTransferenciaAcao, removerLancamento } from "@/app/acoes";
 import { botao, botaoPerigo, botaoSecundario, campo, cartao, link, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
 import { ondeDe, SelectCategoria, SelectConta, SelectOnde, Tipo, Valor, Vazio } from "@/components/ui";
@@ -114,16 +114,23 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                         {nomeConta.get((t.contaId ?? t.cartaoId)!)}
                         {t.data > dia && " · futuro"}
                         {t.origem === "open_finance" && " · 🔗 do banco"}
+                        {t.transferenciaId && " · ↔ transferência"}
                       </span>
                     </span>
                     <Valor centavos={t.valorCentavos} className="font-semibold" />
                   </summary>
 
                   {t.transferenciaId ? (
-                    <p className="mt-3 border-t border-zinc-200 pt-3 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
-                      Transferência (entre contas ou pagamento de fatura): só move dinheiro, não conta como receita nem despesa.
-                      Para corrigir, exclua (as duas pontas saem juntas) e registre de novo em Contas.
-                    </p>
+                    <div className="mt-3 flex flex-col gap-2 border-t border-zinc-200 pt-3 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+                      <p>
+                        ↔ Transferência entre suas contas (ou pagamento de fatura): só move dinheiro, não conta como receita nem despesa.
+                      </p>
+                      <Form action={marcarTransferenciaAcao}>
+                        <input type="hidden" name="id" value={t.id} />
+                        <input type="hidden" name="eh" value="nao" />
+                        <Enviar className={botaoSecundario}>Não é transferência</Enviar>
+                      </Form>
+                    </div>
                   ) : t.origem === "open_finance" ? (
                     <Form action={editarLancamento} className="mt-3 flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
                       {/* veio do banco: valor, data e conta são do banco; aqui só categoria e observação */}
@@ -178,6 +185,13 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                     </label>
                     <Enviar>Salvar alterações</Enviar>
                   </Form>
+                  )}
+                  {!t.transferenciaId && (
+                    <Form action={marcarTransferenciaAcao} className="mt-2">
+                      <input type="hidden" name="id" value={t.id} />
+                      <input type="hidden" name="eh" value="sim" />
+                      <Enviar className="text-xs underline">↔ É transferência entre minhas contas</Enviar>
+                    </Form>
                   )}
                   {t.origem === "manual" && (
                   <div className="mt-2 flex flex-wrap gap-2">

@@ -228,6 +228,8 @@ export const transacao = pgTable(
     cartaoId: uuid().references(() => cartao.id, { onDelete: "cascade" }),
     // par de lançamentos que só move dinheiro (ex.: pagamento de fatura): fora de receitas/despesas
     transferenciaId: uuid(),
+    // o usuário disse "não é transferência": a detecção automática não pareia mais este lançamento
+    transferenciaRecusada: boolean().notNull().default(false),
     data: date().notNull(),
     valorCentavos: centavos().notNull(), // negativo = saída
     descricao: text().notNull().default(""),

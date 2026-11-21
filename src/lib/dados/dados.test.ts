@@ -33,6 +33,7 @@ import { aportar, arquivarObjetivo, atualizarObjetivo, criarObjetivo, excluirApo
 import { FakeProvider, dadosExemplo } from "@/lib/bank/fake";
 import { criarConexao, desconectar, itemIdDaConexao, listarConexoes, registrarItem, sincronizarConexao } from "./conexoes";
 import { aplicarRegrasSemCategoria, criarRegra, listarRegras } from "./regras";
+import { desfazerTransferencia, detectarTransferencias, marcarComoTransferencia } from "./transferencias";
 import { limparFalhas, loginBloqueado, MAX_FALHAS, registrarFalha } from "./tentativas";
 import { criarUsuario, excluirUsuario, exportarDados } from "./usuarios";
 import { resumoDoMes } from "@/lib/calculos/resumo";
@@ -534,5 +535,34 @@ describe("cartão do banco com limite informado pelo usuário", () => {
     await sincronizarConexao(db, uid, conexaoId, banco, new Date("2026-11-21T16:00:00Z"));
     [c] = await listarCartoes(db, uid);
     expect(c).toMatchObject({ limiteTotalCentavos: 565000, limitePessoalCentavos: 21000, devido: 10659, disponivel: 10341, base: "pessoal" });
+  });
+});
+
+describe("transferências entre contas próprias", () => {
+  it("pareia Pix do Inter com pagamento no Nubank, desfazer não volta a parear, marcar à mão, isolamento", async () => {
+    const u = await novoUsuario("transf-auto@exemplo.test");
+    const outro = await novoUsuario("transf-auto-outro@exemplo.test");
+    const base = { categoriaId: null, observacao: null, parcelas: 1 };
+    await criarTransacao(db, u.uid, { ...base, contaId: u.conta.id, cartaoId: null, data: "2026-11-06", valorCentavos: -20451, descricao: "Pix enviado" });
+    await criarTransacao(db, u.uid, { ...base, contaId: null, cartaoId: u.cartao.id, data: "2026-11-06", valorCentavos: 20451, descricao: "Pagamento recebido" });
+    // o mesmo valor em outro usuário não pode ser pareado com os de u
+    await criarTransacao(db, outro.uid, { ...base, contaId: outro.conta.id, cartaoId: null, data: "2026-11-06", valorCentavos: 20451, descricao: "recebido" });
+
+    expect(await detectarTransferencias(db, u.uid, "2026-11-01")).toBe(1);
+    let ts = await listarTransacoes(db, u.uid, { mes: "2026-11" });
+    expect(ts.every((t) => t.transferenciaId) && ts[0]!.transferenciaId === ts[1]!.transferenciaId).toBe(true);
+    expect((await listarTransacoes(db, outro.uid, { mes: "2026-11" }))[0]!.transferenciaId).toBeNull();
+
+    await desfazerTransferencia(db, outro.uid, ts[0]!.id); // outro usuário não desfaz
+    expect((await listarTransacoes(db, u.uid, { mes: "2026-11" })).every((t) => t.transferenciaId)).toBe(true);
+    await desfazerTransferencia(db, u.uid, ts[0]!.id);
+    expect(await detectarTransferencias(db, u.uid, "2026-11-01")).toBe(0); // lembra da recusa
+    ts = await listarTransacoes(db, u.uid, { mes: "2026-11" });
+    expect(ts.every((t) => !t.transferenciaId)).toBe(true);
+
+    await marcarComoTransferencia(db, u.uid, ts[0]!.id);
+    await marcarComoTransferencia(db, outro.uid, ts[1]!.id); // não é dele
+    ts = await listarTransacoes(db, u.uid, { mes: "2026-11" });
+    expect(ts.filter((t) => t.transferenciaId).map((t) => t.id)).toEqual([ts[0]!.id]);
   });
 });

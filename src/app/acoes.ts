@@ -33,6 +33,7 @@ import { provedorAtivo, provedorPorNome } from "@/lib/bank";
 import { FakeProvider } from "@/lib/bank/fake";
 import { desconectar, listarConexoes, registrarItem, sincronizarConexao } from "@/lib/dados/conexoes";
 import { aplicarRegrasSemCategoria, criarRegra, excluirRegra } from "@/lib/dados/regras";
+import { desfazerTransferencia, marcarComoTransferencia } from "@/lib/dados/transferencias";
 import { definirFaixas } from "@/lib/dados/credito";
 import { definirMeta } from "@/lib/dados/metas";
 import { aportar, arquivarObjetivo, atualizarObjetivo, criarObjetivo, excluirAporte, excluirObjetivo } from "@/lib/dados/objetivos";
@@ -455,6 +456,16 @@ export async function removerLancamento(_: Estado, fd: FormData) {
     if (grupo) await excluirParcelamento(db, uid, grupo);
     else if (tid) await excluirTransacao(db, uid, tid);
   }, "Excluído.");
+}
+
+export async function marcarTransferenciaAcao(_: Estado, fd: FormData) {
+  const p = z.object({ id, eh: z.enum(["sim", "nao"]) }).safeParse(Object.fromEntries(fd));
+  if (!p.success) return { erro: msg(p.error) };
+  const { id: tid, eh } = p.data;
+  return rodar(
+    (uid) => (eh === "sim" ? marcarComoTransferencia(db, uid, tid) : desfazerTransferencia(db, uid, tid)),
+    eh === "sim" ? "Marcado como transferência: não conta mais como receita/despesa." : "Desfeito: voltou a contar como receita/despesa.",
+  );
 }
 
 export async function categorizarLote(_: Estado, fd: FormData) {
