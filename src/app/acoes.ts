@@ -9,7 +9,7 @@ import { z } from "zod";
 import { signIn, signOut } from "@/auth";
 import { db } from "@/db";
 import { lerReais } from "@/lib/formato";
-import { atualizarCategoria, criarCategoria, excluirCategoria } from "@/lib/dados/categorias";
+import { atualizarCategoria, criarCategoria, excluirCategoria, listarCategorias } from "@/lib/dados/categorias";
 import { ErroDados } from "@/lib/dados/comum";
 import { atualizarCartao, criarCartao, excluirCartao, marcarFaturaPaga, pagarFatura } from "@/lib/dados/cartoes";
 import { atualizarConta, criarConta, excluirConta, transferir } from "@/lib/dados/contas";
@@ -472,6 +472,28 @@ export async function salvarCategoria(_: Estado, fd: FormData) {
   const p = ler(z.object({ nome: texto(60).min(1, "Informe o nome."), tipo, cor, paiId: idOpcional }), fd);
   if (!p.success) return { erro: msg(p.error) };
   return rodar((uid) => criarCategoria(db, uid, p.data), "Categoria criada.");
+}
+
+const CORES_GRUPO = ["#8b5cf6", "#f97316", "#0ea5e9", "#ef4444", "#14b8a6", "#ec4899", "#6366f1", "#f59e0b", "#22c55e", "#64748b"];
+
+/** Criação rápida pelo seletor de categoria (dentro de outro formulário). Devolve o id para já selecionar. */
+export async function criarCategoriaRapida(d: { nome: string; paiId: string | null; tipo: "despesa" | "receita" }): Promise<{ id?: string; erro?: string }> {
+  const p = z.object({ nome: texto(60).min(1, "Informe o nome."), paiId: z.uuid().nullable(), tipo }).safeParse(d);
+  if (!p.success) return { erro: msg(p.error) };
+  const uid = await exigirUsuario();
+  try {
+    const cats = await listarCategorias(db, uid);
+    if (cats.some((c) => c.paiId === p.data.paiId && c.nome.toLowerCase() === p.data.nome.toLowerCase()))
+      return { erro: "Já existe uma categoria com esse nome aí." };
+    // subcategoria herda a cor do grupo; grupo novo ganha a próxima cor da paleta
+    const cor = p.data.paiId ? (cats.find((c) => c.id === p.data.paiId)?.cor ?? "#64748b") : CORES_GRUPO[cats.filter((c) => !c.paiId).length % CORES_GRUPO.length]!;
+    const novo = await criarCategoria(db, uid, { ...p.data, cor });
+    revalidatePath("/", "layout");
+    return { id: novo };
+  } catch (e) {
+    if (e instanceof ErroDados) return { erro: e.message };
+    throw e;
+  }
 }
 
 export async function editarCategoria(_: Estado, fd: FormData) {

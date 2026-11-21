@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { emArvore, type Categoria } from "@/lib/dados/categorias";
+import type { Categoria } from "@/lib/dados/categorias";
+import { SeletorCategoria } from "./seletor-categoria";
 import { formatarReais } from "@/lib/formato";
 import { botao, campo, cartao } from "./estilos";
 
@@ -14,6 +15,7 @@ export function Valor({ centavos, className = "" }: { centavos: number; classNam
   );
 }
 
+/** Seletor de categoria (grupos expansíveis, busca e criação rápida). Mesma interface de antes. */
 export function SelectCategoria({
   categorias,
   name = "categoriaId",
@@ -27,22 +29,14 @@ export function SelectCategoria({
   vazio?: string;
   id?: string;
 }) {
-  const arvore = emArvore(categorias);
   return (
-    <select name={name} id={id} defaultValue={defaultValue ?? ""} className={campo}>
-      <option value="">{vazio}</option>
-      {(["despesa", "receita"] as const).filter((t) => arvore.some((c) => c.tipo === t)).map((t) => (
-        <optgroup key={t} label={t === "despesa" ? "Despesas" : "Receitas"}>
-          {arvore
-            .filter((c) => c.tipo === t)
-            .map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nivel ? `  — ${c.nome}` : c.nome}
-              </option>
-            ))}
-        </optgroup>
-      ))}
-    </select>
+    <SeletorCategoria
+      categorias={categorias.map(({ id, nome, paiId, tipo, cor }) => ({ id, nome, paiId, tipo, cor }))}
+      name={name}
+      defaultValue={defaultValue}
+      vazio={vazio}
+      id={id}
+    />
   );
 }
 

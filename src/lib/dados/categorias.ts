@@ -26,7 +26,8 @@ export async function criarCategoria(
     if (pai.paiId) throw new ErroDados("Subcategoria só pode ficar dentro de uma categoria principal.");
     d = { ...d, tipo: pai.tipo };
   }
-  await db.insert(categoria).values({ ...d, usuarioId: uid });
+  const [c] = await db.insert(categoria).values({ ...d, usuarioId: uid }).returning({ id: categoria.id });
+  return c!.id;
 }
 
 export const atualizarCategoria = (db: Db, uid: string, id: string, d: { nome: string; cor: string }) =>

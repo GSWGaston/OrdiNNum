@@ -56,7 +56,8 @@ test("login, filtro e categorização em lote; outro usuário não vê nada", as
 
   await page.goto("/lancamentos?q=lote");
   for (const cb of await page.getByRole("checkbox").all()) await cb.check();
-  await page.locator("#lote select").selectOption({ label: "Alimentação" });
+  await page.locator("#lote").getByRole("button", { name: /Sem categoria/ }).click();
+  await page.getByRole("option", { name: "Alimentação" }).click();
   await page.getByRole("button", { name: "Aplicar aos marcados" }).click();
   await expect(page.getByText("2 lançamento(s) categorizado(s).")).toBeVisible();
   await expect(page.getByText(/· Alimentação ·/)).toHaveCount(2);
