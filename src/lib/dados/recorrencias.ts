@@ -16,6 +16,25 @@ export async function criarRecorrencia(db: Db, uid: string, d: DadosRecorrencia)
   await db.insert(recorrencia).values({ ...d, usuarioId: uid });
 }
 
+export async function atualizarRecorrencia(db: Db, uid: string, id: string, d: DadosRecorrencia) {
+  await contaDoUsuario(db, uid, d.contaId);
+  if (d.categoriaId) await categoriaDoUsuario(db, uid, d.categoriaId);
+  await db.update(recorrencia).set(d).where(and(eq(recorrencia.id, id), eq(recorrencia.usuarioId, uid)));
+}
+
+/** Pula a ocorrência pendente (ex.: mês sem cobrança): avança a próxima data sem lançar. */
+export async function pularOcorrencia(db: Db, uid: string, id: string) {
+  const [r] = await db
+    .select()
+    .from(recorrencia)
+    .where(and(eq(recorrencia.id, id), eq(recorrencia.usuarioId, uid)));
+  if (!r) throw new ErroDados("Recorrência não encontrada.");
+  await db
+    .update(recorrencia)
+    .set({ proximaData: proximaData(r.proximaData, r.periodicidade) })
+    .where(and(eq(recorrencia.id, r.id), eq(recorrencia.proximaData, r.proximaData)));
+}
+
 export const excluirRecorrencia = (db: Db, uid: string, id: string) =>
   db.delete(recorrencia).where(and(eq(recorrencia.id, id), eq(recorrencia.usuarioId, uid)));
 

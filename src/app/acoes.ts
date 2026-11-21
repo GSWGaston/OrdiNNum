@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs";
 import { AuthError } from "next-auth";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { signIn, signOut } from "@/auth";
@@ -12,7 +13,14 @@ import { atualizarCategoria, criarCategoria, excluirCategoria } from "@/lib/dado
 import { ErroDados } from "@/lib/dados/comum";
 import { atualizarCartao, criarCartao, excluirCartao, pagarFatura } from "@/lib/dados/cartoes";
 import { atualizarConta, criarConta, excluirConta, transferir } from "@/lib/dados/contas";
-import { criarRecorrencia, definirAutomatica, excluirRecorrencia, lancarRecorrencia } from "@/lib/dados/recorrencias";
+import {
+  atualizarRecorrencia,
+  criarRecorrencia,
+  definirAutomatica,
+  excluirRecorrencia,
+  lancarRecorrencia,
+  pularOcorrencia,
+} from "@/lib/dados/recorrencias";
 import {
   atualizarTransacao,
   categorizarEmLote,
@@ -21,6 +29,7 @@ import {
   excluirTransacao,
 } from "@/lib/dados/transacoes";
 import { buscarPorEmail, criarUsuario, excluirUsuario } from "@/lib/dados/usuarios";
+import { JANELA_MIN } from "@/lib/dados/tentativas";
 import type { Estado } from "@/lib/estado";
 import { exigirUsuario } from "@/lib/sessao";
 
@@ -101,7 +110,13 @@ export async function entrar(_: Estado, fd: FormData): Promise<Estado> {
   try {
     await signIn("credentials", { email: fd.get("email"), senha: fd.get("senha"), redirectTo: "/" });
   } catch (e) {
-    if (e instanceof AuthError) return { erro: "E-mail ou senha inválidos." };
+    if (e instanceof AuthError)
+      return {
+        erro:
+          (e as { code?: string }).code === "bloqueado"
+            ? `Muitas tentativas erradas. Espere ${JANELA_MIN} minutos e tente de novo.`
+            : "E-mail ou senha inválidos.",
+      };
     throw e; // inclui o redirect de sucesso
   }
   return null;
@@ -117,6 +132,16 @@ export async function excluirMinhaConta(_: Estado, fd: FormData): Promise<Estado
   await excluirUsuario(db, uid);
   await signOut({ redirectTo: "/entrar" });
   return null;
+}
+
+export async function definirTema(_: Estado, fd: FormData): Promise<Estado> {
+  const p = z.enum(["sistema", "claro", "escuro"]).safeParse(fd.get("tema"));
+  if (!p.success) return { erro: "Tema inválido." };
+  const c = await cookies();
+  if (p.data === "sistema") c.delete("tema");
+  else c.set("tema", p.data, { maxAge: 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: true, secure: process.env.NODE_ENV === "production" });
+  revalidatePath("/", "layout");
+  return { ok: "Tema aplicado." };
 }
 
 // ---------- contas ----------
@@ -256,6 +281,7 @@ export async function removerCategoria(_: Estado, fd: FormData) {
 export async function salvarRecorrencia(_: Estado, fd: FormData) {
   const p = ler(
     z.object({
+      id: idOpcional,
       tipo,
       valor,
       descricao: texto(200).min(1, "Informe a descrição."),
@@ -268,8 +294,18 @@ export async function salvarRecorrencia(_: Estado, fd: FormData) {
     fd,
   );
   if (!p.success) return { erro: msg(p.error) };
-  const { tipo: t, valor: v, ...d } = p.data;
-  return rodar((uid) => criarRecorrencia(db, uid, { ...d, valorCentavos: comSinal(t, v) }), "Recorrência criada.");
+  const { id: rid, tipo: t, valor: v, ...d } = p.data;
+  const dados = { ...d, valorCentavos: comSinal(t, v) };
+  return rodar(
+    (uid) => (rid ? atualizarRecorrencia(db, uid, rid, dados) : criarRecorrencia(db, uid, dados)),
+    rid ? "Recorrência salva." : "Recorrência criada.",
+  );
+}
+
+export async function pularRecorrencia(_: Estado, fd: FormData) {
+  const p = id.safeParse(fd.get("id"));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => pularOcorrencia(db, uid, p.data), "Ocorrência pulada.");
 }
 
 export async function alternarAutomatica(_: Estado, fd: FormData) {

@@ -1,9 +1,15 @@
 import bcrypt from "bcryptjs";
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 import { db } from "@/db";
+import { limparFalhas, loginBloqueado, registrarFalha } from "@/lib/dados/tentativas";
 import { buscarPorEmail } from "@/lib/dados/usuarios";
+
+/** Erro com código próprio para a tela de login dizer "muitas tentativas" em vez de "senha inválida". */
+export class LoginBloqueado extends CredentialsSignin {
+  code = "bloqueado";
+}
 
 // Compara contra um hash falso quando o e-mail não existe, para o tempo de resposta não revelar quem tem cadastro.
 const HASH_FALSO = "$2b$12$WkUQZh9tFxTt8Z/rP7oZ4eSKJRXbNydd94SqjevkvBMCXosJnBzfi";
@@ -19,9 +25,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(raw) {
         const p = credenciais.safeParse(raw);
         if (!p.success) return null;
-        const u = await buscarPorEmail(db, p.data.email.toLowerCase());
+        const email = p.data.email.toLowerCase();
+        // vale também para e-mail sem cadastro: o bloqueio não revela quem existe
+        if (await loginBloqueado(db, email)) throw new LoginBloqueado();
+        const u = await buscarPorEmail(db, email);
         const ok = await bcrypt.compare(p.data.senha, u?.senhaHash ?? HASH_FALSO);
-        return u && ok ? { id: u.id, name: u.nome, email: u.email } : null;
+        if (!u || !ok) {
+          await registrarFalha(db, email);
+          return null;
+        }
+        await limparFalhas(db, email);
+        return { id: u.id, name: u.nome, email: u.email };
       },
     }),
   ],

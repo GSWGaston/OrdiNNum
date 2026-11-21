@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,9 +14,12 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // tema salvo em cookie pelo Ajustes: o servidor já manda a classe certa, sem piscar e sem script
+  const tema = (await cookies()).get("tema")?.value;
+  const classeTema = tema === "claro" ? "tema-claro" : tema === "escuro" ? "tema-escuro" : "";
   return (
-    <html lang="pt-BR" className="h-full antialiased">
+    <html lang="pt-BR" className={`h-full antialiased ${classeTema}`}>
       <body className="min-h-full bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">{children}</body>
     </html>
   );

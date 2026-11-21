@@ -1,9 +1,16 @@
-import { alternarAutomatica, lancarRecorrenciaAcao, removerRecorrencia, salvarRecorrencia } from "@/app/acoes";
+import {
+  alternarAutomatica,
+  lancarRecorrenciaAcao,
+  pularRecorrencia,
+  removerRecorrencia,
+  salvarRecorrencia,
+} from "@/app/acoes";
 import { botaoPerigo, botaoSecundario, campo, cartao, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
 import { PERIODICIDADES, SelectCategoria, SelectConta, Tipo, Valor, Vazio } from "@/components/ui";
 import { db } from "@/db";
 import { hoje } from "@/lib/calculos/datas";
+import type { Categoria } from "@/lib/dados/categorias";
 import { listarCategorias } from "@/lib/dados/categorias";
 import { listarContas } from "@/lib/dados/contas";
 import { listarRecorrencias } from "@/lib/dados/recorrencias";
@@ -11,6 +18,71 @@ import { centavosParaTexto, formatarData } from "@/lib/formato";
 import { exigirUsuario } from "@/lib/sessao";
 
 export const metadata = { title: "Recorrências" };
+
+type Rec = Awaited<ReturnType<typeof listarRecorrencias>>[number];
+
+/** Campos de criar e de editar recorrência (com `r`, vêm preenchidos). */
+function CamposRecorrencia({
+  r,
+  contas,
+  categorias,
+  dia,
+}: {
+  r?: Rec;
+  contas: { id: string; nome: string }[];
+  categorias: Categoria[];
+  dia: string;
+}) {
+  return (
+    <>
+      {r && <input type="hidden" name="id" value={r.id} />}
+      <Tipo defaultValue={r && r.valorCentavos > 0 ? "receita" : "despesa"} />
+      <label className={rotulo}>
+        Descrição
+        <input name="descricao" required maxLength={200} defaultValue={r?.descricao} placeholder="Ex.: Aluguel" className={campo} />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className={rotulo}>
+          Valor (R$)
+          <input
+            name="valor"
+            inputMode="decimal"
+            required
+            defaultValue={r ? centavosParaTexto(Math.abs(r.valorCentavos)) : undefined}
+            placeholder="0,00"
+            className={campo}
+          />
+        </label>
+        <label className={rotulo}>
+          Periodicidade
+          <select name="periodicidade" defaultValue={r?.periodicidade ?? "mensal"} className={campo}>
+            {Object.entries(PERIODICIDADES).map(([v, n]) => (
+              <option key={v} value={v}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={rotulo}>
+          Próximo vencimento
+          <input name="proximaData" type="date" required defaultValue={r?.proximaData ?? dia} className={campo} />
+        </label>
+        <label className={rotulo}>
+          Conta
+          <SelectConta contas={contas} defaultValue={r?.contaId} />
+        </label>
+      </div>
+      <label className={rotulo}>
+        Categoria
+        <SelectCategoria categorias={categorias} defaultValue={r?.categoriaId} />
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="automatica" defaultChecked={r ? r.automatica : true} className="h-4 w-4 accent-emerald-700" />
+        Lançar sozinha no vencimento (desmarque para contas de valor variável)
+      </label>
+    </>
+  );
+}
 
 export default async function Recorrencias() {
   const uid = await exigirUsuario();
@@ -38,8 +110,8 @@ export default async function Recorrencias() {
                 <span className="flex flex-col">
                   <span className="font-semibold">{r.descricao}</span>
                   <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                    {r.automatica ? "↻ Automática" : "✋ Manual"} · {PERIODICIDADES[r.periodicidade]} · {nomeConta.get(r.contaId)} · próxima{" "}
-                    {formatarData(r.proximaData)}
+                    {r.automatica ? "↻ Automática" : "✋ Manual"} · {PERIODICIDADES[r.periodicidade]} · {nomeConta.get(r.contaId)} ·
+                    próxima {formatarData(r.proximaData)}
                     {vencida && <strong className="ml-1 text-amber-700 dark:text-amber-400">(vence hoje ou já venceu)</strong>}
                   </span>
                 </span>
@@ -47,27 +119,40 @@ export default async function Recorrencias() {
               </div>
               <div className="flex flex-wrap items-end gap-2">
                 {!r.automatica && (
-                <Form action={lancarRecorrenciaAcao} className="flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="id" value={r.id} />
-                  <label className={`${rotulo} w-32`}>
-                    Valor desta vez
-                    <input name="valor" inputMode="decimal" placeholder={centavosParaTexto(Math.abs(r.valorCentavos))} className={campo} />
-                  </label>
-                  <Enviar className={botaoSecundario}>Lançar {formatarData(r.proximaData)}</Enviar>
-                </Form>
+                  <Form action={lancarRecorrenciaAcao} className="flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="id" value={r.id} />
+                    <label className={`${rotulo} w-32`}>
+                      Valor desta vez
+                      <input name="valor" inputMode="decimal" placeholder={centavosParaTexto(Math.abs(r.valorCentavos))} className={campo} />
+                    </label>
+                    <Enviar className={botaoSecundario}>Lançar {formatarData(r.proximaData)}</Enviar>
+                  </Form>
                 )}
+                <Form action={pularRecorrencia}>
+                  <input type="hidden" name="id" value={r.id} />
+                  <Enviar className={botaoSecundario} confirmar={`Pular a de ${formatarData(r.proximaData)} sem lançar?`}>
+                    Pular {formatarData(r.proximaData)}
+                  </Enviar>
+                </Form>
                 <Form action={alternarAutomatica}>
                   <input type="hidden" name="id" value={r.id} />
                   <input type="hidden" name="automatica" value={r.automatica ? "nao" : "sim"} />
                   <Enviar className={botaoSecundario}>{r.automatica ? "Tornar manual" : "Tornar automática"}</Enviar>
                 </Form>
-                <Form action={removerRecorrencia}>
+              </div>
+              <details>
+                <summary className="cursor-pointer text-sm font-medium">Editar</summary>
+                <Form action={salvarRecorrencia} className="mt-3 flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+                  <CamposRecorrencia r={r} contas={contas} categorias={categorias} dia={dia} />
+                  <Enviar>Salvar alterações</Enviar>
+                </Form>
+                <Form action={removerRecorrencia} className="mt-2">
                   <input type="hidden" name="id" value={r.id} />
                   <Enviar className={botaoPerigo} confirmar={`Excluir a recorrência "${r.descricao}"? Lançamentos já feitos ficam.`}>
                     Excluir
                   </Enviar>
                 </Form>
-              </div>
+              </details>
             </li>
           );
         })}
@@ -78,43 +163,7 @@ export default async function Recorrencias() {
           Nova recorrência
         </h2>
         <Form action={salvarRecorrencia} className="flex flex-col gap-3">
-          <Tipo />
-          <label className={rotulo}>
-            Descrição
-            <input name="descricao" required maxLength={200} placeholder="Ex.: Aluguel" className={campo} />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className={rotulo}>
-              Valor (R$)
-              <input name="valor" inputMode="decimal" required placeholder="0,00" className={campo} />
-            </label>
-            <label className={rotulo}>
-              Periodicidade
-              <select name="periodicidade" defaultValue="mensal" className={campo}>
-                {Object.entries(PERIODICIDADES).map(([v, r]) => (
-                  <option key={v} value={v}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={rotulo}>
-              Próximo vencimento
-              <input name="proximaData" type="date" required defaultValue={dia} className={campo} />
-            </label>
-            <label className={rotulo}>
-              Conta
-              <SelectConta contas={contas} />
-            </label>
-          </div>
-          <label className={rotulo}>
-            Categoria
-            <SelectCategoria categorias={categorias} />
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="automatica" defaultChecked className="h-4 w-4 accent-emerald-700" />
-            Lançar sozinha no vencimento (desmarque para contas de valor variável)
-          </label>
+          <CamposRecorrencia contas={contas} categorias={categorias} dia={dia} />
           <Enviar>Adicionar</Enviar>
         </Form>
       </section>

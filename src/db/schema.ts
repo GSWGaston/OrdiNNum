@@ -36,6 +36,17 @@ export const usuario = pgTable("usuario", {
   criadoEm: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
 
+// Falhas de login recentes por e-mail (proteção contra força bruta). Não é dado do usuário: não tem usuario_id.
+export const tentativaLogin = pgTable(
+  "tentativa_login",
+  {
+    id: id(),
+    email: text().notNull(),
+    criadoEm: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index().on(t.email, t.criadoEm)],
+);
+
 export const conta = pgTable(
   "conta",
   {

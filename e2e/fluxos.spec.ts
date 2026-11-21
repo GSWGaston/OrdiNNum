@@ -89,3 +89,19 @@ test("cartão: compra é despesa no dia e não mexe no saldo da conta", async ({
   await expect(page.getByTestId("saldo-contas")).toHaveText(/\+R\$\s500,00/);
   await expect(page.getByText(/Fatura Cartão Teste/)).toBeVisible();
 });
+
+test("login bloqueia depois de 5 senhas erradas", async ({ page }) => {
+  const email = await cadastrar(page);
+  await page.getByRole("button", { name: "Sair" }).click();
+  for (let i = 0; i < 5; i++) {
+    await page.getByLabel("E-mail").fill(email);
+    await page.getByLabel("Senha").fill(`errada-${i}`);
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await expect(page.getByText("E-mail ou senha inválidos.")).toBeVisible();
+  }
+  // até a senha certa é recusada durante o bloqueio
+  await page.getByLabel("E-mail").fill(email);
+  await page.getByLabel("Senha").fill(SENHA);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page.getByText(/Muitas tentativas erradas/)).toBeVisible();
+});

@@ -8,7 +8,16 @@ import { atualizarCartao, criarCartao, excluirCartao, listarCartoes, pagarFatura
 import { atualizarCategoria, criarCategoria, excluirCategoria, listarCategorias } from "./categorias";
 import { ErroDados } from "./comum";
 import { atualizarConta, criarConta, excluirConta, listarContas, transferir } from "./contas";
-import { criarRecorrencia, definirAutomatica, excluirRecorrencia, lancarRecorrencia, lancarVencidas, listarRecorrencias } from "./recorrencias";
+import {
+  atualizarRecorrencia,
+  criarRecorrencia,
+  definirAutomatica,
+  excluirRecorrencia,
+  lancarRecorrencia,
+  lancarVencidas,
+  listarRecorrencias,
+  pularOcorrencia,
+} from "./recorrencias";
 import {
   atualizarTransacao,
   categorizarEmLote,
@@ -17,6 +26,7 @@ import {
   excluirTransacao,
   listarTransacoes,
 } from "./transacoes";
+import { limparFalhas, loginBloqueado, MAX_FALHAS, registrarFalha } from "./tentativas";
 import { criarUsuario, excluirUsuario, exportarDados } from "./usuarios";
 import { resumoDoMes } from "@/lib/calculos/resumo";
 
@@ -101,6 +111,10 @@ describe("isolamento entre usuários", () => {
     await excluirCategoria(db, a.uid, b.despesa.id);
     await excluirRecorrencia(db, a.uid, recB.id);
     await definirAutomatica(db, a.uid, recB.id, true);
+    await expect(pularOcorrencia(db, a.uid, recB.id)).rejects.toThrow(ErroDados);
+    const recA = { contaId: a.conta.id, categoriaId: null, descricao: "hack", valorCentavos: -1, periodicidade: "mensal" as const, proximaData: "2030-01-01" };
+    await atualizarRecorrencia(db, a.uid, recB.id, recA);
+    await expect(atualizarRecorrencia(db, a.uid, recB.id, { ...recA, contaId: b.conta.id })).rejects.toThrow(ErroDados);
     await lancarVencidas(db, a.uid, "2027-12-31");
     expect(await estadoDeB()).toEqual(antes);
   });
@@ -229,9 +243,31 @@ describe("recorrência automática", () => {
     const recs = await listarRecorrencias(db, u.uid);
     expect(recs.map((r) => `${r.descricao} ${r.proximaData}`).sort()).toEqual(["Aluguel auto 2026-12-10", "Luz manual 2026-09-10"]);
 
+    // editar e pular
+    const luz = recs.find((r) => r.descricao === "Luz manual")!;
+    await atualizarRecorrencia(db, u.uid, luz.id, { ...base, descricao: "Luz manual", valorCentavos: -25000, proximaData: "2026-10-10", automatica: false });
+    await pularOcorrencia(db, u.uid, luz.id);
+    expect((await listarRecorrencias(db, u.uid)).find((r) => r.id === luz.id)).toMatchObject({ valorCentavos: -25000, proximaData: "2026-11-10" });
+
     // virar automática passa a lançar a manual também
     await definirAutomatica(db, u.uid, recs.find((r) => r.descricao === "Luz manual")!.id, true);
     await lancarVencidas(db, u.uid, "2026-11-21");
     expect((await listarTransacoes(db, u.uid, { mes: "2026-11" })).map((t) => t.descricao).sort()).toEqual(["Aluguel auto", "Luz manual"]);
+    expect(await listarTransacoes(db, u.uid, { mes: "2026-10", texto: "Luz" })).toEqual([]); // outubro foi pulado
+  });
+});
+
+describe("limite de tentativas de login", () => {
+  it("bloqueia após 5 falhas em 15 min, libera depois da janela e ao acertar", async () => {
+    const t0 = new Date("2026-11-21T12:00:00Z");
+    const min = (m: number) => new Date(t0.getTime() + m * 60_000);
+    for (let i = 0; i < MAX_FALHAS - 1; i++) await registrarFalha(db, "alvo@exemplo.test", min(i));
+    expect(await loginBloqueado(db, "alvo@exemplo.test", min(5))).toBe(false);
+    await registrarFalha(db, "alvo@exemplo.test", min(5));
+    expect(await loginBloqueado(db, "alvo@exemplo.test", min(6))).toBe(true);
+    expect(await loginBloqueado(db, "outro@exemplo.test", min(6))).toBe(false);
+    expect(await loginBloqueado(db, "alvo@exemplo.test", min(30))).toBe(false); // janela passou
+    await limparFalhas(db, "alvo@exemplo.test");
+    expect(await loginBloqueado(db, "alvo@exemplo.test", min(6))).toBe(false);
   });
 });

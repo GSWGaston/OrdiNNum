@@ -1,8 +1,26 @@
 @import "tailwindcss";
 
+/* dark: segue o sistema, a menos que o usuário tenha escolhido claro/escuro em Ajustes */
+@custom-variant dark {
+  &:where(.tema-escuro, .tema-escuro *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:not(.tema-claro, .tema-claro *)) {
+      @slot;
+    }
+  }
+}
+
 :root {
   color-scheme: light dark;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+:root.tema-claro {
+  color-scheme: light;
+}
+:root.tema-escuro {
+  color-scheme: dark;
 }
 
 /* valores alinhados em colunas */

@@ -31,6 +31,9 @@ export function criarUsuario(db: Db, d: { nome: string; email: string; senhaHash
 export const buscarPorEmail = async (db: Db, email: string) =>
   (await db.select().from(usuario).where(eq(usuario.email, email)))[0];
 
+export const usuarioExiste = async (db: Db, uid: string) =>
+  (await db.select({ id: usuario.id }).from(usuario).where(eq(usuario.id, uid))).length > 0;
+
 /** Tudo do usuário (LGPD: portabilidade). Nunca inclui o hash da senha. */
 export async function exportarDados(db: Db, uid: string) {
   const [u] = await db

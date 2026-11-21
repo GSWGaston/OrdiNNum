@@ -1,4 +1,5 @@
-import { editarCategoria, excluirMinhaConta, removerCategoria, salvarCategoria } from "@/app/acoes";
+import { cookies } from "next/headers";
+import { definirTema, editarCategoria, excluirMinhaConta, removerCategoria, salvarCategoria } from "@/app/acoes";
 import { botaoPerigo, botaoSecundario, campo, cartao, link, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
 import { Tipo } from "@/components/ui";
@@ -13,10 +14,28 @@ export default async function Configuracoes() {
   const categorias = await listarCategorias(db, uid);
   const arvore = emArvore(categorias);
   const principais = categorias.filter((c) => !c.paiId);
+  const tema = (await cookies()).get("tema")?.value ?? "sistema";
 
   return (
     <>
       <h1 className={titulo}>Ajustes</h1>
+
+      <section className={cartao} aria-labelledby="aparencia">
+        <h2 id="aparencia" className="mb-3 font-semibold">
+          Aparência
+        </h2>
+        <Form action={definirTema} className="flex flex-wrap items-end gap-2">
+          <label className={rotulo}>
+            Tema
+            <select name="tema" defaultValue={tema} className={campo}>
+              <option value="sistema">Automático (igual ao celular/computador)</option>
+              <option value="claro">Claro</option>
+              <option value="escuro">Escuro</option>
+            </select>
+          </label>
+          <Enviar className={botaoSecundario}>Aplicar</Enviar>
+        </Form>
+      </section>
 
       <section className={cartao} aria-labelledby="cats">
         <h2 id="cats" className="mb-3 font-semibold">

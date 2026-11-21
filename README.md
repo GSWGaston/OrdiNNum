@@ -35,6 +35,25 @@ Primeira vez com Playwright: `npx playwright install chromium`.
 | `PGLITE_DIR` | não | pasta do PGlite (padrão `./.pglite`) |
 | `AUTH_TRUST_HOST` | fora da Vercel | Auth.js atrás de proxy |
 
+## Publicar (Vercel + Neon) e backups
+
+Precisa das suas contas; nada disso foi feito ainda.
+
+1. **Banco (Neon):** crie um projeto em neon.tech, região `sa-east-1` (São Paulo). Copie a *connection string*
+   com `sslmode=require`.
+2. **Migrações:** localmente, `DATABASE_URL="<string do Neon>" npm run db:migrate`.
+3. **GitHub:** suba este repositório (privado).
+4. **Vercel:** importe o repositório e configure as variáveis `AUTH_SECRET` (gere um novo, diferente do local) e
+   `DATABASE_URL`. Deploy. O HTTPS vem pronto; HSTS e CSP já estão no código.
+5. **Teste:** cadastre-se no endereço publicado e lance algo.
+
+**Backups (spec: diários, criptografados, com teste de restauração):**
+- O Neon guarda histórico para restauração a qualquer ponto no tempo (o prazo depende do plano) e criptografa em
+  repouso. Isso cobre o "diário e criptografado".
+- Teste de restauração (faça uma vez por mês): no painel do Neon crie um *branch* a partir de um horário passado,
+  aponte `DATABASE_URL` local para ele e rode `npm run dev`. Os dados daquele horário devem aparecer. Apague o branch.
+- Cópia extra fora do provedor: Ajustes → "Exportar tudo (JSON)" baixa todos os seus dados.
+
 ## Estrutura
 
 ```
@@ -87,10 +106,14 @@ As demais do modelo (metas, orçamento, objetivos, conexões, regras) entram nas
 - **Transação ganhou `observacao`** (o módulo Lançamentos da especificação cita "observação").
 - **Categorias padrão** criadas no cadastro (Moradia > Aluguel, Luz, Água, Internet etc.).
 - **Fuso fixo America/Sao_Paulo** para "hoje".
-- **Cabeçalhos**: CSP, HSTS, nosniff, frame DENY, Referrer-Policy, Permissions-Policy (`next.config.ts`).
-  CSP usa `'unsafe-inline'` em scripts (exigência do Next sem nonce).
+- **Cabeçalhos**: CSP com nonce por requisição (`src/proxy.ts`; scripts só com o nonce, estilos inline permitidos
+  por causa das cores das categorias), HSTS, nosniff, frame DENY, Referrer-Policy, Permissions-Policy (`next.config.ts`).
+- **Login**: 5 senhas erradas em 15 min bloqueiam aquele e-mail por 15 min (tabela `tentativa_login`). Sessão de um
+  usuário que foi apagado é encerrada (`/sair`).
+- **Formulários** (`src/components/form.tsx`): com erro, o que foi digitado fica; com sucesso, o formulário recarrega
+  com os valores salvos.
 - **CSV** com `;`, vírgula decimal e BOM (abre direto no Excel em pt-BR); células de texto protegidas contra injeção de fórmula.
-- Tema claro/escuro segue o sistema (`prefers-color-scheme`).
+- Tema: automático (segue o sistema), claro ou escuro, escolhido em Ajustes e guardado em cookie.
 
 ## Teste manual da fase 1
 
