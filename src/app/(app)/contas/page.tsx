@@ -1,4 +1,4 @@
-import { pagarFaturaAcao, removerCartao, removerConta, salvarCartao, salvarConta } from "@/app/acoes";
+import { pagarFaturaAcao, removerCartao, removerConta, salvarCartao, salvarConta, transferirAcao } from "@/app/acoes";
 import { botaoPerigo, botaoSecundario, campo, cartao, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
 import { SelectConta, TIPOS_CONTA, Valor } from "@/components/ui";
@@ -127,6 +127,42 @@ export default async function Contas() {
           <Enviar>Adicionar</Enviar>
         </Form>
       </section>
+      {contas.length > 1 && (
+        <section className={cartao} aria-labelledby="transferir">
+          <h2 id="transferir" className="mb-1 font-semibold">
+            Transferir entre contas
+          </h2>
+          <p className="mb-3 text-xs text-zinc-600 dark:text-zinc-400">
+            Ex.: da corrente para a poupança. Só move o dinheiro: não conta como receita nem despesa.
+          </p>
+          <Form action={transferirAcao} className="grid grid-cols-2 gap-3">
+            <label className={rotulo}>
+              De
+              <SelectConta contas={contas} name="deContaId" defaultValue={contas[0]!.id} />
+            </label>
+            <label className={rotulo}>
+              Para
+              <SelectConta contas={contas} name="paraContaId" defaultValue={contas[1]!.id} />
+            </label>
+            <label className={rotulo}>
+              Valor (R$)
+              <input name="valor" inputMode="decimal" required placeholder="0,00" className={campo} />
+            </label>
+            <label className={rotulo}>
+              Data
+              <input name="data" type="date" required defaultValue={dia} className={campo} />
+            </label>
+            <label className={`${rotulo} col-span-2`}>
+              Descrição (opcional)
+              <input name="descricao" maxLength={200} placeholder="Transferência" className={campo} />
+            </label>
+            <div className="col-span-2">
+              <Enviar>Transferir</Enviar>
+            </div>
+          </Form>
+        </section>
+      )}
+
       <h2 className={`${titulo} mt-4`}>Cartões de crédito</h2>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Compra no cartão conta como gasto no dia da compra. A fatura aparece como conta a pagar e, ao pagar, o dinheiro sai da

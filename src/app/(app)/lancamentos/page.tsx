@@ -120,8 +120,8 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
 
                   {t.transferenciaId ? (
                     <p className="mt-3 border-t border-zinc-200 pt-3 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
-                      Pagamento de fatura: só move dinheiro da conta para o cartão, não conta como despesa. Para corrigir, exclua
-                      (as duas pontas saem juntas) e registre de novo em Contas.
+                      Transferência (entre contas ou pagamento de fatura): só move dinheiro, não conta como receita nem despesa.
+                      Para corrigir, exclua (as duas pontas saem juntas) e registre de novo em Contas.
                     </p>
                   ) : (
                   <Form action={editarLancamento} className="mt-3 flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">

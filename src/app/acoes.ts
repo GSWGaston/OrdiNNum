@@ -11,7 +11,7 @@ import { lerReais } from "@/lib/formato";
 import { atualizarCategoria, criarCategoria, excluirCategoria } from "@/lib/dados/categorias";
 import { ErroDados } from "@/lib/dados/comum";
 import { atualizarCartao, criarCartao, excluirCartao, pagarFatura } from "@/lib/dados/cartoes";
-import { atualizarConta, criarConta, excluirConta } from "@/lib/dados/contas";
+import { atualizarConta, criarConta, excluirConta, transferir } from "@/lib/dados/contas";
 import { criarRecorrencia, excluirRecorrencia, lancarRecorrencia } from "@/lib/dados/recorrencias";
 import {
   atualizarTransacao,
@@ -172,6 +172,22 @@ export async function pagarFaturaAcao(_: Estado, fd: FormData) {
   if (!p.success) return { erro: msg(p.error) };
   const { valor: v, ...d } = p.data;
   return rodar((uid) => pagarFatura(db, uid, { ...d, valorCentavos: v }), "Pagamento registrado.");
+}
+
+export async function transferirAcao(_: Estado, fd: FormData) {
+  const p = ler(
+    z.object({
+      deContaId: z.uuid({ error: "Escolha a conta de origem." }),
+      paraContaId: z.uuid({ error: "Escolha a conta de destino." }),
+      valor,
+      data: dia,
+      descricao: texto(200).default(""),
+    }),
+    fd,
+  );
+  if (!p.success) return { erro: msg(p.error) };
+  const { valor: v, ...d } = p.data;
+  return rodar((uid) => transferir(db, uid, { ...d, valorCentavos: v }), "Transferência registrada.");
 }
 
 // ---------- lançamentos ----------

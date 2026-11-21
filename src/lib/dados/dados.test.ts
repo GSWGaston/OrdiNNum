@@ -7,7 +7,7 @@ import * as schema from "@/db/schema";
 import { atualizarCartao, criarCartao, excluirCartao, listarCartoes, pagarFatura } from "./cartoes";
 import { atualizarCategoria, criarCategoria, excluirCategoria, listarCategorias } from "./categorias";
 import { ErroDados } from "./comum";
-import { atualizarConta, criarConta, excluirConta, listarContas } from "./contas";
+import { atualizarConta, criarConta, excluirConta, listarContas, transferir } from "./contas";
 import { criarRecorrencia, excluirRecorrencia, lancarRecorrencia, listarRecorrencias } from "./recorrencias";
 import {
   atualizarTransacao,
@@ -18,6 +18,7 @@ import {
   listarTransacoes,
 } from "./transacoes";
 import { criarUsuario, excluirUsuario, exportarDados } from "./usuarios";
+import { resumoDoMes } from "@/lib/calculos/resumo";
 
 let db: Db;
 
@@ -108,6 +109,10 @@ describe("isolamento entre usuários", () => {
     await expect(criarTransacao(db, a.uid, { ...base, contaId: null, categoriaId: null })).rejects.toThrow(ErroDados);
     await expect(pagarFatura(db, a.uid, { cartaoId: b.cartao.id, contaId: a.conta.id, valorCentavos: 1, data: "2026-11-01" })).rejects.toThrow(ErroDados);
     await expect(pagarFatura(db, a.uid, { cartaoId: a.cartao.id, contaId: b.conta.id, valorCentavos: 1, data: "2026-11-01" })).rejects.toThrow(ErroDados);
+    const tr = { valorCentavos: 1, data: "2026-11-01", descricao: "" };
+    await expect(transferir(db, a.uid, { ...tr, deContaId: a.conta.id, paraContaId: b.conta.id })).rejects.toThrow(ErroDados);
+    await expect(transferir(db, a.uid, { ...tr, deContaId: b.conta.id, paraContaId: a.conta.id })).rejects.toThrow(ErroDados);
+    await expect(transferir(db, a.uid, { ...tr, deContaId: a.conta.id, paraContaId: a.conta.id })).rejects.toThrow(ErroDados);
     await expect(criarTransacao(db, a.uid, { ...base, contaId: b.conta.id, categoriaId: null })).rejects.toThrow(ErroDados);
     await expect(criarTransacao(db, a.uid, { ...base, contaId: a.conta.id, categoriaId: b.despesa.id })).rejects.toThrow(ErroDados);
     await expect(atualizarTransacao(db, a.uid, txB.id, { ...base, contaId: b.conta.id, categoriaId: null })).rejects.toThrow(ErroDados);
@@ -156,6 +161,21 @@ describe("um mês inteiro lançado dá o saldo correto", () => {
     expect(await listarTransacoes(db, u.uid, { mes: "2026-11", categoriaId: moradia.id })).toHaveLength(2);
     // texto com curinga é literal
     expect(await listarTransacoes(db, u.uid, { mes: "2026-11", texto: "%" })).toEqual([]);
+  });
+
+  it("transferência move saldo entre contas e não é receita nem despesa", async () => {
+    const u = await novoUsuario("transf@exemplo.test"); // conta com R$ 1.000,00
+    await criarConta(db, u.uid, { nome: "Zz Poupança", tipo: "poupanca", saldoCentavos: 0 });
+    const poup = (await listarContas(db, u.uid, "2026-12-31")).find((c) => c.nome === "Zz Poupança")!;
+    await transferir(db, u.uid, { deContaId: u.conta.id, paraContaId: poup.id, valorCentavos: 30000, data: "2026-11-10", descricao: "" });
+    const saldos = Object.fromEntries((await listarContas(db, u.uid, "2026-12-31")).map((c) => [c.id, c.saldoAtual]));
+    expect([saldos[u.conta.id], saldos[poup.id]]).toEqual([70000, 30000]);
+    const lancs = await listarTransacoes(db, u.uid, { mes: "2026-11" });
+    expect(lancs.map((l) => l.descricao)).toEqual(["Transferência", "Transferência"]);
+    const r = resumoDoMes(lancs, [], 100000, "2026-11-30");
+    expect([r.receitas, r.despesas]).toEqual([0, 0]);
+    await excluirTransacao(db, u.uid, lancs[0]!.id);
+    expect(await listarTransacoes(db, u.uid, { mes: "2026-11" })).toEqual([]);
   });
 
   it("cartão: compra não mexe no saldo da conta; pagar fatura sim, e o par se apaga junto", async () => {

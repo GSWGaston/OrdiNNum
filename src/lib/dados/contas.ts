@@ -2,6 +2,29 @@ import { and, asc, eq, lte, sum } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conta, transacao } from "@/db/schema";
 import { saldoDaConta } from "@/lib/calculos/resumo";
+import { contaDoUsuario, ErroDados } from "./comum";
+
+/**
+ * Transferência entre contas próprias: par de lançamentos ligados por transferencia_id.
+ * Move dinheiro, não é receita nem despesa.
+ */
+export async function transferir(
+  db: Db,
+  uid: string,
+  d: { deContaId: string; paraContaId: string; valorCentavos: number; data: string; descricao: string },
+) {
+  if (d.deContaId === d.paraContaId) throw new ErroDados("Escolha contas diferentes.");
+  return db.transaction(async (tx) => {
+    await contaDoUsuario(tx, uid, d.deContaId);
+    await contaDoUsuario(tx, uid, d.paraContaId);
+    const base = { usuarioId: uid, data: d.data, descricao: d.descricao || "Transferência", transferenciaId: crypto.randomUUID() };
+    const v = Math.abs(d.valorCentavos);
+    await tx.insert(transacao).values([
+      { ...base, contaId: d.deContaId, valorCentavos: -v },
+      { ...base, contaId: d.paraContaId, valorCentavos: v },
+    ]);
+  });
+}
 
 export type DadosConta = { nome: string; tipo: (typeof conta.$inferInsert)["tipo"]; saldoCentavos: number };
 

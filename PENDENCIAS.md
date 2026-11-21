@@ -30,7 +30,7 @@ Comparação da Fase 1 entregue com a especificação (PDF) e o prompt. Cada ite
 
 | # | Item | Por que importa |
 | --- | --- | --- |
-| C1 | Transferência entre contas próprias | Hoje mover dinheiro da corrente para a poupança vira uma despesa + uma receita e infla os totais do mês (e vai distorcer o gasto diário da fase 2). O mecanismo (`transferencia_id`) já existe por causa do pagamento de fatura; falta a tela. |
+| C1 | ~~Transferência entre contas próprias~~ **Feito** (tela Contas → "Transferir entre contas") | Hoje mover dinheiro da corrente para a poupança vira uma despesa + uma receita e infla os totais do mês (e vai distorcer o gasto diário da fase 2). O mecanismo (`transferencia_id`) já existe por causa do pagamento de fatura; falta a tela. |
 | C2 | Limite de tentativas de login | Proteção contra força bruta na senha. |
 | C3 | Recuperar senha ("esqueci minha senha") | Exige envio de e-mail (provedor de e-mail). |
 | C4 | Fuso horário por usuário | "Hoje" está fixo em São Paulo. |
