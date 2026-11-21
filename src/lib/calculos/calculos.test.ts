@@ -140,6 +140,17 @@ describe("cartão", () => {
     expect(resumoDoCartao({ ...banco, faturaVencimento: null }, compras, "2026-11-21").faturas).toEqual([
       { fechamento: null, vencimento: "2026-12-10", total: 35010, aberto: 35010 },
     ]);
+    // banco não informou a fatura (Nubank): calcula pelas compras; fatura já vencida conta como paga
+    const nubank = { ...c, diaFechamento: 3, diaVencimento: 10, limiteTotalCentavos: 565000, limiteDisponivelCentavos: 10341, faturaAbertaCentavos: 0, faturaVencimento: null };
+    const comprasNu = [
+      { data: "2026-10-20", valorCentavos: -9999 }, // fatura 10/11: já venceu
+      { data: "2026-11-04", valorCentavos: -6659 }, // fatura 10/12
+      { data: "2026-11-18", valorCentavos: -4000 }, // fatura 10/12
+      { data: "2026-11-15", valorCentavos: 5000 }, // pagamento/estorno: ignorado
+    ];
+    expect(resumoDoCartao(nubank, comprasNu, "2026-11-21").faturas).toEqual([
+      { fechamento: "2026-12-03", vencimento: "2026-12-10", total: 10659, aberto: 10659 },
+    ]);
     expect(proximoDia("2026-11-05", 10)).toBe("2026-11-10");
     expect(proximoDia("2026-11-10", 10)).toBe("2026-11-10");
     expect(proximoDia("2027-01-31", 31)).toBe("2027-01-31");
