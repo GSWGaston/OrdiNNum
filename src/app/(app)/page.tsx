@@ -159,34 +159,35 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
         </Link>
       </nav>
 
-      <section className={`${cartao} flex flex-col gap-1`} aria-labelledby="saldo-mes">
-        <h2 id="saldo-mes" className="text-sm text-zinc-600 dark:text-zinc-400">
-          Saldo do mês (receitas − despesas)
+      <section className={`${cartao} flex flex-col gap-2`} aria-labelledby="saldo-contas-h">
+        <h2 id="saldo-contas-h" className="text-sm text-zinc-600 dark:text-zinc-400">
+          Saldo em contas hoje
         </h2>
-        <p className="text-4xl font-black" data-testid="saldo-mes">
-          <Valor centavos={r.saldoMes} />
+        <p className="text-4xl font-black" data-testid="saldo-contas">
+          <Valor centavos={saldoAtual} />
         </p>
-        <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <dt className="text-zinc-600 dark:text-zinc-400">Receitas</dt>
-            <dd className="tabular font-semibold">{formatarReais(r.receitas)}</dd>
-          </div>
-          <div>
-            <dt className="text-zinc-600 dark:text-zinc-400">Despesas</dt>
-            <dd className="tabular font-semibold">{formatarReais(r.despesas)}</dd>
-          </div>
-        </dl>
+        <ul className="flex flex-col gap-1 text-sm">
+          {contas.map((c) => (
+            <li key={c.id} className="flex justify-between gap-2">
+              <span>🏦 {c.nome}</span>
+              <Valor centavos={c.saldoAtual} />
+            </li>
+          ))}
+        </ul>
+        <Link href="/contas" className={`${link} text-xs`}>
+          ver contas
+        </Link>
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className={cartao}>
-          <h2 className="text-sm text-zinc-600 dark:text-zinc-400">Saldo em contas hoje</h2>
-          <p className="text-2xl font-bold" data-testid="saldo-contas">
-            <Valor centavos={saldoAtual} />
+          <h2 className="text-sm text-zinc-600 dark:text-zinc-400">Saldo do mês (receitas − despesas)</h2>
+          <p className="text-2xl font-bold" data-testid="saldo-mes">
+            <Valor centavos={r.saldoMes} />
           </p>
-          <Link href="/contas" className={`${link} text-sm`}>
-            {contas.length} conta(s)
-          </Link>
+          <p className="tabular text-xs text-zinc-600 dark:text-zinc-400">
+            Receitas {formatarReais(r.receitas)} · Despesas {formatarReais(r.despesas)}
+          </p>
         </div>
         {ehMesAtual && (
           <div className={cartao}>
