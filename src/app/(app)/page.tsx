@@ -3,7 +3,9 @@ import { cartao, link, titulo } from "@/components/estilos";
 import { GastoDiario } from "@/components/gasto-diario";
 import { MedidorCredito } from "@/components/credito";
 import { BarraObjetivo } from "@/components/objetivos";
-import { AlertasOrcamento } from "@/components/orcamentos";
+import { Alertas } from "@/components/alertas";
+import { gerarAlertas } from "@/lib/calculos/alertas";
+import { listarConexoes } from "@/lib/dados/conexoes";
 import { progressoOrcamentos } from "@/lib/calculos/orcamento";
 import { orcamentosVigentes } from "@/lib/dados/orcamentos";
 import { resumoCredito } from "@/lib/dados/credito";
@@ -30,7 +32,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   const { fim } = limitesDoMes(mes);
 
   const ehMesAtual = mes === mesAtual;
-  const [contas, cartoes, lancamentos, recorrencias, categorias, gastoDoDia, orcamentos, credito, objetivos] = await Promise.all([
+  const [contas, cartoes, lancamentos, recorrencias, categorias, gastoDoDia, orcamentos, credito, objetivos, conexoes] = await Promise.all([
     listarContas(db, uid, dia),
     listarCartoes(db, uid),
     listarTransacoes(db, uid, { mes }),
@@ -40,6 +42,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
     orcamentosVigentes(db, uid, mes),
     resumoCredito(db, uid, mesAtual),
     listarObjetivos(db, uid, dia),
+    listarConexoes(db, uid),
   ]);
   const objetivosAtivos = objetivos.filter((o) => o.status === "ativo").slice(0, 3);
 
@@ -71,7 +74,17 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   return (
     <>
       {ehMesAtual && <GastoDiario dados={gastoDoDia} />}
-      <AlertasOrcamento progresso={progressoOrcamentos(orcamentos, lancamentos, categorias)} categorias={nomeCat} />
+      <Alertas
+        alertas={gerarAlertas({
+          hoje: dia,
+          agora: new Date(),
+          gastoDiario: gastoDoDia,
+          orcamentos: progressoOrcamentos(orcamentos, lancamentos, categorias).map((p) => ({ ...p, nome: nomeCat.get(p.categoriaId)?.nome ?? "?" })),
+          credito: credito?.consolidado ?? null,
+          aPagar: aPagarAte(somarDias(dia, 3)),
+          conexoes,
+        })}
+      />
       {credito && (
         <section className={cartao} aria-labelledby="uso-credito">
           <h2 id="uso-credito" className="mb-1 text-sm text-zinc-600 dark:text-zinc-400">

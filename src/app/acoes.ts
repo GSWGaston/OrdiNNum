@@ -29,6 +29,10 @@ import {
   excluirTransacao,
 } from "@/lib/dados/transacoes";
 import { buscarPorEmail, criarUsuario, excluirUsuario } from "@/lib/dados/usuarios";
+import { provedorAtivo, provedorPorNome } from "@/lib/bank";
+import { FakeProvider } from "@/lib/bank/fake";
+import { desconectar, listarConexoes, registrarItem, sincronizarConexao } from "@/lib/dados/conexoes";
+import { aplicarRegrasSemCategoria, criarRegra, excluirRegra } from "@/lib/dados/regras";
 import { definirFaixas } from "@/lib/dados/credito";
 import { definirMeta } from "@/lib/dados/metas";
 import { aportar, arquivarObjetivo, atualizarObjetivo, criarObjetivo, excluirAporte, excluirObjetivo } from "@/lib/dados/objetivos";
@@ -187,6 +191,114 @@ export async function salvarFaixas(_: Estado, fd: FormData) {
   const p = ler(z.object({ amarelaPct: pct, vermelhaPct: pct }), fd);
   if (!p.success) return { erro: msg(p.error) };
   return rodar((uid) => definirFaixas(db, uid, p.data), "Faixas salvas.");
+}
+
+// ---------- Open Finance ----------
+
+const SEM_OPEN_FINANCE = "Open Finance não está configurado neste servidor (veja o README: PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET).";
+
+/** Token curto para o widget da Pluggy abrir no navegador (a chave da API nunca sai do servidor). */
+export async function tokenConexaoBanco(): Promise<{ token: string | null; erro?: string }> {
+  const uid = await exigirUsuario();
+  const p = provedorAtivo();
+  if (!p) return { token: null, erro: SEM_OPEN_FINANCE };
+  try {
+    return { token: await p.criarTokenConexao({ clientUserId: uid }) };
+  } catch {
+    return { token: null, erro: "Não foi possível falar com o agregador agora. Tente de novo em instantes." };
+  }
+}
+
+const itemId = z.string().trim().regex(/^[0-9a-f-]{36}$/i, "ID do item inválido (é um código como 1a2b3c4d-...).");
+
+async function registrar(id: string): Promise<Estado> {
+  const p = provedorAtivo();
+  if (!p) return { erro: SEM_OPEN_FINANCE };
+  let r: { contas: number; transacoes: number } | undefined;
+  const estado = await rodar(async (uid) => {
+    r = await registrarItem(db, uid, p, id);
+  });
+  return estado?.erro ? estado : { ok: `Banco conectado: ${r?.contas} conta(s)/cartão(ões) e ${r?.transacoes} lançamento(s) importados.` };
+}
+
+/** Chamado pelo widget quando a conexão termina (ou fica pendente de autorização no banco). */
+export async function registrarItemAcao(id: string): Promise<Estado> {
+  const p = itemId.safeParse(id);
+  return p.success ? registrar(p.data) : { erro: msg(p.error) };
+}
+
+/** Meu Pluggy: o usuário cola o ID do item que aparece no painel da Pluggy. */
+export async function conectarPorItemId(_: Estado, fd: FormData) {
+  const p = itemId.safeParse(fd.get("itemId"));
+  return p.success ? registrar(p.data) : { erro: msg(p.error) };
+}
+
+/** Só sem Pluggy configurada (desenvolvimento): conecta o banco simulado, com dados fictícios. */
+export async function conectarSimulado(): Promise<Estado> {
+  if (provedorAtivo()?.nome !== "fake") return { erro: "O banco simulado só existe em desenvolvimento." };
+  let r: { contas: number; transacoes: number } | undefined;
+  const estado = await rodar(async (uid) => {
+    r = await registrarItem(db, uid, new FakeProvider(), `00000000-0000-4000-8000-${uid.replace(/-/g, "").slice(0, 12)}`);
+  });
+  return estado?.erro ? estado : { ok: `Banco simulado conectado: ${r?.transacoes} lançamento(s) de exemplo importados.` };
+}
+
+async function provedorDaConexao(uid: string, conexaoId: string) {
+  const c = (await listarConexoes(db, uid)).find((x) => x.id === conexaoId);
+  return c ? provedorPorNome(c.provedor) : null;
+}
+
+export async function sincronizarAgora(_: Estado, fd: FormData) {
+  const p = id.safeParse(fd.get("id"));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar(async (uid) => {
+    const prov = await provedorDaConexao(uid, p.data);
+    if (!prov) throw new ErroDados(SEM_OPEN_FINANCE);
+    await sincronizarConexao(db, uid, p.data, prov);
+  }, "Sincronizado.");
+}
+
+export async function desconectarAcao(_: Estado, fd: FormData) {
+  const p = z.object({ id, historico: z.enum(["manter", "apagar"], { error: "Escolha o que fazer com o histórico." }) }).safeParse(Object.fromEntries(fd));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar(async (uid) => {
+    const prov = await provedorDaConexao(uid, p.data.id);
+    try {
+      await desconectar(db, uid, p.data.id, prov, p.data.historico === "manter");
+    } catch (e) {
+      if (e instanceof ErroDados) throw e;
+      throw new ErroDados("Não foi possível revogar a autorização no agregador agora. Tente de novo em instantes.");
+    }
+  }, p.data.historico === "manter" ? "Banco desconectado. Contas e lançamentos ficaram como manuais." : "Banco desconectado e dados importados apagados.");
+}
+
+// ---------- regras de categorização ----------
+
+export async function salvarRegra(_: Estado, fd: FormData) {
+  const p = ler(
+    z.object({
+      padraoTexto: texto(80).min(2, "Escreva ao menos 2 letras do texto que aparece na descrição."),
+      categoriaId: z.uuid({ error: "Escolha a categoria." }),
+      prioridade: z.coerce.number().int().min(0).max(100).default(0),
+    }),
+    fd,
+  );
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => criarRegra(db, uid, p.data), "Regra criada. Vale para os próximos lançamentos importados.");
+}
+
+export async function removerRegra(_: Estado, fd: FormData) {
+  const p = id.safeParse(fd.get("id"));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => excluirRegra(db, uid, p.data), "Regra excluída.");
+}
+
+export async function aplicarRegrasAcao(): Promise<Estado> {
+  let n = 0;
+  const r = await rodar(async (uid) => {
+    n = await aplicarRegrasSemCategoria(db, uid);
+  });
+  return r?.erro ? r : { ok: `${n} lançamento(s) sem categoria foram categorizados.` };
 }
 
 // ---------- objetivos ----------

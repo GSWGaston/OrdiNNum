@@ -64,6 +64,13 @@
       "when": 1795286507641,
       "tag": "0008_objetivos",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795287992546,
+      "tag": "0009_open_finance",
+      "breakpoints": true
     }
   ]
 }

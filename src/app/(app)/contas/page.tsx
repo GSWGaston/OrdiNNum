@@ -84,7 +84,12 @@ export default async function Contas() {
 
   return (
     <>
-      <h1 className={titulo}>Contas e carteiras</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className={titulo}>Contas e carteiras</h1>
+        <Link href="/bancos" className={botaoSecundario}>
+          🏦 Conectar banco
+        </Link>
+      </div>
       {contas.length > 0 && (
         <p className="text-sm">
           Total hoje: <Valor centavos={total} className="font-bold" />
@@ -97,10 +102,33 @@ export default async function Contas() {
               <summary className="flex cursor-pointer list-none justify-between gap-2">
                 <span className="flex flex-col">
                   <span className="font-semibold">{c.nome}</span>
-                  <span className="text-xs text-zinc-600 dark:text-zinc-400">{TIPOS_CONTA[c.tipo]}</span>
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                    {TIPOS_CONTA[c.tipo]}
+                    {c.origem === "open_finance" && " · 🔗 saldo do banco"}
+                  </span>
                 </span>
                 <Valor centavos={c.saldoAtual} className="font-bold" />
               </summary>
+              {c.origem === "open_finance" ? (
+                <Form action={salvarConta} className="mt-3 flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+                  <input type="hidden" name="id" value={c.id} />
+                  <input type="hidden" name="tipo" value={c.tipo} />
+                  <input type="hidden" name="saldo" value="0" />
+                  <label className={rotulo}>
+                    Nome
+                    <input name="nome" required maxLength={80} defaultValue={c.nome} className={campo} />
+                  </label>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                    Conta ligada ao banco: saldo e lançamentos vêm de lá. Para remover, desconecte em{" "}
+                    <Link href="/bancos" className={link}>
+                      Bancos
+                    </Link>
+                    .
+                  </p>
+                  <Enviar>Renomear</Enviar>
+                </Form>
+              ) : (
+              <>
               <Form action={salvarConta} className="mt-3 flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
                 <CamposConta c={c} />
                 <p className="text-xs text-zinc-600 dark:text-zinc-400">
@@ -114,6 +142,8 @@ export default async function Contas() {
                   Excluir conta
                 </Enviar>
               </Form>
+              </>
+              )}
             </details>
           </li>
         ))}
@@ -271,7 +301,7 @@ export default async function Contas() {
           <Enviar>Adicionar cartão</Enviar>
         </Form>
       </section>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">O botão “Conectar banco” chega na fase 3 (Open Finance).</p>
+
     </>
   );
 }

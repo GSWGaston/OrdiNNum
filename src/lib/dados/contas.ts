@@ -44,8 +44,13 @@ export async function listarContas(db: Db, uid: string, ate: string) {
 
 export const criarConta = (db: Db, uid: string, d: DadosConta) => db.insert(conta).values({ ...d, usuarioId: uid });
 
-export const atualizarConta = (db: Db, uid: string, id: string, d: DadosConta) =>
-  db.update(conta).set(d).where(and(eq(conta.id, id), eq(conta.usuarioId, uid)));
+export async function atualizarConta(db: Db, uid: string, id: string, d: DadosConta) {
+  const manual = and(eq(conta.id, id), eq(conta.usuarioId, uid), eq(conta.origem, "manual"));
+  const doBanco = and(eq(conta.id, id), eq(conta.usuarioId, uid), eq(conta.origem, "open_finance"));
+  await db.update(conta).set(d).where(manual);
+  await db.update(conta).set({ nome: d.nome }).where(doBanco); // saldo e tipo vêm do banco
+}
 
+/** Conta ligada ao banco sai desconectando o banco (para escolher se mantém o histórico). */
 export const excluirConta = (db: Db, uid: string, id: string) =>
-  db.delete(conta).where(and(eq(conta.id, id), eq(conta.usuarioId, uid)));
+  db.delete(conta).where(and(eq(conta.id, id), eq(conta.usuarioId, uid), eq(conta.origem, "manual")));

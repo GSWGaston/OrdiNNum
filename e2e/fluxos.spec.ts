@@ -140,3 +140,29 @@ test("objetivo: cria com prazo, guarda dinheiro e vê o progresso", async ({ pag
   await page.getByRole("button", { name: "+ Guardar" }).click();
   await expect(page.getByText(/R\$\s300,00 de R\$\s1\.200,00 \(25%\)/)).toBeVisible();
 });
+
+test("Open Finance (banco simulado): conecta, importa e sincronizar de novo não duplica", async ({ page }) => {
+  await cadastrar(page);
+  await page.goto("/bancos");
+  await page.getByRole("button", { name: "Conectar banco simulado" }).click();
+  await expect(page.getByText(/9 lançamento\(s\) de exemplo importados/)).toBeVisible();
+  const contarImportados = async () => {
+    let n = 0;
+    // o banco simulado gera os últimos ~20 dias: mês atual e anterior bastam
+    const hoje = new Date();
+    const meses = [0, -1].map((d) => new Date(hoje.getFullYear(), hoje.getMonth() + d, 1).toISOString().slice(0, 7));
+    for (const mes of meses) {
+      await page.goto(`/lancamentos?mes=${mes}`);
+      n += await page.getByText("🔗 do banco").count();
+    }
+    return n;
+  };
+  const antes = await contarImportados();
+  expect(antes).toBeGreaterThan(0);
+  await page.goto("/bancos");
+  await page.getByRole("button", { name: "Sincronizar agora" }).click();
+  await expect(page.getByText("Sincronizado.")).toBeVisible();
+  expect(await contarImportados()).toBe(antes);
+  await page.goto("/contas");
+  await expect(page.getByText("🔗 saldo do banco")).toBeVisible();
+});

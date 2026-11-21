@@ -13,7 +13,9 @@ export function proxy(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data:",
     "font-src 'self'",
-    `connect-src 'self'${dev ? " ws:" : ""}`,
+    // widget de conexão bancária da Pluggy roda num iframe próprio
+    "frame-src https://connect.pluggy.ai",
+    `connect-src 'self' https://api.pluggy.ai${dev ? " ws:" : ""}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

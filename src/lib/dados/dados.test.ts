@@ -30,6 +30,9 @@ import { definirMeta, gastoDiarioDoUsuario, metaVigente } from "./metas";
 import { definirOrcamento, orcamentosVigentes } from "./orcamentos";
 import { definirFaixas, resumoCredito } from "./credito";
 import { aportar, arquivarObjetivo, atualizarObjetivo, criarObjetivo, excluirAporte, excluirObjetivo, listarObjetivos, reservadoEmObjetivos } from "./objetivos";
+import { FakeProvider, dadosExemplo } from "@/lib/bank/fake";
+import { criarConexao, desconectar, itemIdDaConexao, listarConexoes, registrarItem, sincronizarConexao } from "./conexoes";
+import { aplicarRegrasSemCategoria, criarRegra, listarRegras } from "./regras";
 import { limparFalhas, loginBloqueado, MAX_FALHAS, registrarFalha } from "./tentativas";
 import { criarUsuario, excluirUsuario, exportarDados } from "./usuarios";
 import { resumoDoMes } from "@/lib/calculos/resumo";
@@ -147,7 +150,7 @@ describe("isolamento entre usuários", () => {
   it("excluir a conta do usuário apaga todos os dados dele e só dele", async () => {
     await excluirUsuario(db, b.uid);
     const e = await exportarDados(db, b.uid);
-    expect(e).toEqual({ usuario: undefined, contas: [], cartoes: [], categorias: [], recorrencias: [], metas: [], orcamentos: [], objetivos: [], aportes: [], transacoes: [] });
+    expect(e).toEqual({ usuario: undefined, contas: [], cartoes: [], categorias: [], recorrencias: [], metas: [], orcamentos: [], objetivos: [], aportes: [], regras: [], conexoes: [], transacoes: [] });
     expect(await listarContas(db, a.uid, "2026-12-31")).toHaveLength(1);
   });
 });
@@ -384,5 +387,132 @@ describe("objetivos", () => {
     await excluirObjetivo(db, outro.uid, viagem!.id);
     expect(await listarObjetivos(db, u.uid, "2026-11-21")).toEqual(antes);
     expect(await reservadoEmObjetivos(db, outro.uid)).toBe(0);
+  });
+});
+
+describe("Open Finance: sincronização", () => {
+  const DIA = "2026-11-21";
+  const agora = new Date(`${DIA}T15:00:00Z`);
+  process.env.ENCRYPTION_KEY = "chave-de-teste";
+
+  async function preparar(email: string) {
+    const uid = await criarUsuario(db, { nome: email, email, senhaHash: "x" });
+    const banco = new FakeProvider(dadosExemplo(DIA));
+    const conexaoId = await criarConexao(db, uid, "fake", "item-xyz");
+    return { uid, banco, conexaoId };
+  }
+  const todasDoUsuario = async (uid: string) => {
+    const r = [];
+    for (const mes of ["2026-10", "2026-11"]) r.push(...(await listarTransacoes(db, uid, { mes })));
+    return r;
+  };
+
+  it("importa contas, cartão e transações; sincronizar de novo não duplica", async () => {
+    const { uid, banco, conexaoId } = await preparar("of1@exemplo.test");
+    expect(await itemIdDaConexao(db, uid, conexaoId)).toBe("item-xyz");
+    expect(await criarConexao(db, uid, "fake", "item-xyz")).toBe(conexaoId); // mesmo item não cria outra conexão
+
+    const r1 = await sincronizarConexao(db, uid, conexaoId, banco, agora);
+    expect(r1).toEqual({ contas: 2, transacoes: 9 });
+    await sincronizarConexao(db, uid, conexaoId, banco, agora);
+    await sincronizarConexao(db, uid, conexaoId, banco, new Date(`${DIA}T20:00:00Z`));
+    expect(await todasDoUsuario(uid)).toHaveLength(9);
+
+    const [contaBanco] = await listarContas(db, uid, DIA);
+    expect(contaBanco).toMatchObject({ nome: "Conta Simulada", origem: "open_finance", saldoAtual: 234567 }); // saldo do banco
+    const [cartaoBanco] = await listarCartoes(db, uid);
+    expect(cartaoBanco).toMatchObject({ limiteTotalCentavos: 300000, disponivel: 241010, diaVencimento: 10, diaFechamento: 1 });
+
+    const ts = await todasDoUsuario(uid);
+    expect(ts.filter((t) => t.transferenciaId).map((t) => t.descricao).sort()).toEqual(["PAGAMENTO FATURA CARTAO", "PAGAMENTO RECEBIDO"]);
+    expect(ts.find((t) => t.descricao === "LOJA ELETRO 2/5")).toMatchObject({ parcelaAtual: 2, parcelasTotal: 5, valorCentavos: -20000 });
+    const [conexao] = await listarConexoes(db, uid);
+    expect(conexao).toMatchObject({ banco: "Banco Simulado", status: "atualizado", erro: null });
+    expect(conexao).not.toHaveProperty("itemIdExterno"); // nunca vai para a tela
+    expect(JSON.stringify(await exportarDados(db, uid))).not.toContain("item-xyz");
+  });
+
+  it("banco muda: atualiza valor, apaga o que sumiu, mantém a categoria do usuário; regras categorizam", async () => {
+    const { uid, banco, conexaoId } = await preparar("of2@exemplo.test");
+    const cats = await listarCategorias(db, uid);
+    const transporte = cats.find((c) => c.nome === "Transporte público")!;
+    const mercado = cats.find((c) => c.nome === "Mercado")!;
+    const restaurante = cats.find((c) => c.nome === "Restaurante")!;
+    await criarRegra(db, uid, { padraoTexto: "uber", categoriaId: transporte.id, prioridade: 0 });
+    await sincronizarConexao(db, uid, conexaoId, banco, agora);
+
+    let ts = await todasDoUsuario(uid);
+    expect(ts.find((t) => t.descricao === "UBER *TRIP")!.categoriaId).toBe(transporte.id); // regra aplicada na importação
+    const ifood = ts.find((t) => t.descricao === "IFOOD *RESTAURANTE")!;
+    await atualizarTransacao(db, uid, ifood.id, { contaId: null, cartaoId: null, categoriaId: restaurante.id, data: "2020-01-01", valorCentavos: 1, descricao: "hack", observacao: "jantar" });
+    ts = await todasDoUsuario(uid);
+    // importado: só categoria e observação mudam
+    expect(ts.find((t) => t.id === ifood.id)).toMatchObject({ categoriaId: restaurante.id, observacao: "jantar", valorCentavos: -12990, descricao: "IFOOD *RESTAURANTE" });
+    await excluirTransacao(db, uid, ifood.id); // não exclui lançamento do banco
+    expect(await todasDoUsuario(uid)).toHaveLength(9);
+
+    // o banco corrige o valor do mercado e a compra da padaria (pendente) some
+    banco.dados.transacoes["cartao-1"]!.find((t) => t.idExterno === "c3")!.valorCentavos = -26000;
+    banco.dados.transacoes["cc-1"] = banco.dados.transacoes["cc-1"]!.filter((t) => t.idExterno !== "t3");
+    await sincronizarConexao(db, uid, conexaoId, banco, agora);
+    ts = await todasDoUsuario(uid);
+    expect(ts).toHaveLength(8);
+    expect(ts.find((t) => t.descricao === "MERCADO BOM PRECO")!.valorCentavos).toBe(-26000);
+    expect(ts.find((t) => t.id === ifood.id)!.categoriaId).toBe(restaurante.id); // categoria do usuário mantida
+
+    await criarRegra(db, uid, { padraoTexto: "mercado", categoriaId: mercado.id, prioridade: 0 });
+    expect(await aplicarRegrasSemCategoria(db, uid)).toBe(1);
+    expect((await todasDoUsuario(uid)).find((t) => t.descricao === "MERCADO BOM PRECO")!.categoriaId).toBe(mercado.id);
+  });
+
+  it("registrar item: recusa item de outro usuário, aceita o do próprio e o do Meu Pluggy (sem dono)", async () => {
+    const { uid, banco } = await preparar("of8@exemplo.test");
+    banco.dados.item = { ...banco.dados.item, clientUserId: "outra-pessoa" };
+    await expect(registrarItem(db, uid, banco, "item-alheio")).rejects.toThrow("outro usuário");
+    banco.dados.item = { ...banco.dados.item, clientUserId: uid };
+    expect(await registrarItem(db, uid, banco, "item-meu")).toMatchObject({ contas: 2, transacoes: 9 });
+    banco.buscarItem = async () => {
+      throw new Error("404");
+    };
+    await expect(registrarItem(db, uid, banco, "nao-existe")).rejects.toThrow("Confira o ID");
+  });
+
+  it("erro no banco fica registrado na conexão", async () => {
+    const { uid, banco, conexaoId } = await preparar("of3@exemplo.test");
+    banco.listarContas = async () => {
+      throw new Error("Pluggy GET /accounts falhou (500)");
+    };
+    await expect(sincronizarConexao(db, uid, conexaoId, banco, agora)).rejects.toThrow(ErroDados);
+    expect((await listarConexoes(db, uid))[0]).toMatchObject({ status: "erro", erro: "Pluggy GET /accounts falhou (500)" });
+  });
+
+  it("desconectar: mantendo histórico o saldo de hoje fica igual; sem manter, apaga o que veio do banco", async () => {
+    const a = await preparar("of4@exemplo.test");
+    await sincronizarConexao(db, a.uid, a.conexaoId, a.banco, agora);
+    await desconectar(db, a.uid, a.conexaoId, a.banco, true, DIA);
+    const [c] = await listarContas(db, a.uid, DIA);
+    expect(c).toMatchObject({ origem: "manual", saldoAtual: 234567, conexaoId: null });
+    expect(await todasDoUsuario(a.uid)).toHaveLength(9);
+    expect(await listarConexoes(db, a.uid)).toEqual([]);
+
+    const b = await preparar("of5@exemplo.test");
+    await sincronizarConexao(db, b.uid, b.conexaoId, b.banco, agora);
+    await desconectar(db, b.uid, b.conexaoId, b.banco, false, DIA);
+    expect(await listarContas(db, b.uid, DIA)).toEqual([]);
+    expect(await listarCartoes(db, b.uid)).toEqual([]);
+    expect(await todasDoUsuario(b.uid)).toEqual([]);
+  });
+
+  it("isolamento: outro usuário não sincroniza, lê nem desconecta a conexão alheia", async () => {
+    const a = await preparar("of6@exemplo.test");
+    const b = await preparar("of7@exemplo.test");
+    await sincronizarConexao(db, a.uid, a.conexaoId, a.banco, agora);
+    await expect(sincronizarConexao(db, b.uid, a.conexaoId, b.banco, agora)).rejects.toThrow(ErroDados);
+    await expect(itemIdDaConexao(db, b.uid, a.conexaoId)).rejects.toThrow(ErroDados);
+    await expect(desconectar(db, b.uid, a.conexaoId, b.banco, false)).rejects.toThrow(ErroDados);
+    await expect(criarRegra(db, b.uid, { padraoTexto: "xx", categoriaId: (await listarCategorias(db, a.uid))[0]!.id, prioridade: 0 })).rejects.toThrow(ErroDados);
+    expect(await todasDoUsuario(a.uid)).toHaveLength(9);
+    expect((await listarConexoes(db, b.uid)).map((c) => c.id)).toEqual([b.conexaoId]);
+    expect(await listarRegras(db, b.uid)).toEqual([]);
   });
 });

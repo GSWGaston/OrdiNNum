@@ -1,10 +1,12 @@
 import { cookies } from "next/headers";
-import { definirTema, editarCategoria, excluirMinhaConta, removerCategoria, salvarCategoria } from "@/app/acoes";
+import Link from "next/link";
+import { aplicarRegrasAcao, definirTema, editarCategoria, excluirMinhaConta, removerCategoria, removerRegra, salvarCategoria, salvarRegra } from "@/app/acoes";
 import { botaoPerigo, botaoSecundario, campo, cartao, link, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
-import { Tipo } from "@/components/ui";
+import { SelectCategoria, Tipo } from "@/components/ui";
 import { db } from "@/db";
 import { emArvore, listarCategorias } from "@/lib/dados/categorias";
+import { listarRegras } from "@/lib/dados/regras";
 import { exigirUsuario } from "@/lib/sessao";
 
 export const metadata = { title: "Ajustes" };
@@ -14,6 +16,8 @@ export default async function Configuracoes() {
   const categorias = await listarCategorias(db, uid);
   const arvore = emArvore(categorias);
   const principais = categorias.filter((c) => !c.paiId);
+  const regras = await listarRegras(db, uid);
+  const nomeCat = new Map(categorias.map((c) => [c.id, c.nome]));
   const tema = (await cookies()).get("tema")?.value ?? "sistema";
 
   return (
@@ -113,6 +117,55 @@ export default async function Configuracoes() {
         </Form>
       </section>
 
+      <section className={`${cartao} flex flex-col gap-3`} aria-labelledby="regras" id="regras">
+        <div>
+          <h2 id="regras" className="font-semibold">
+            Regras de categorização
+          </h2>
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+            Lançamentos que chegam do banco com o texto na descrição ganham a categoria sozinhos (sem diferenciar maiúsculas e acentos).
+            Com duas regras valendo, ganha a de maior prioridade e, empatando, a de texto mais longo. Categoria que você mudou à mão não
+            é trocada.
+          </p>
+        </div>
+        {regras.length > 0 && (
+          <ul className="flex flex-col gap-1 text-sm">
+            {regras.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-2">
+                <span>
+                  “{r.padraoTexto}” → <strong>{nomeCat.get(r.categoriaId)}</strong>
+                  {r.prioridade > 0 && <span className="text-xs text-zinc-500"> (prioridade {r.prioridade})</span>}
+                </span>
+                <Form action={removerRegra}>
+                  <input type="hidden" name="id" value={r.id} />
+                  <Enviar className="text-xs underline" confirmar="Excluir esta regra?">
+                    excluir
+                  </Enviar>
+                </Form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <Form action={salvarRegra} className="flex flex-wrap items-end gap-2">
+          <label className={`${rotulo} w-36`}>
+            Se a descrição tem
+            <input name="padraoTexto" required minLength={2} maxLength={80} placeholder="ex.: uber" className={campo} />
+          </label>
+          <label className={`${rotulo} min-w-40 flex-1`}>
+            Categoria
+            <SelectCategoria categorias={categorias} vazio="Escolha…" />
+          </label>
+          <label className={`${rotulo} w-24`}>
+            Prioridade
+            <input name="prioridade" type="number" min={0} max={100} defaultValue={0} className={campo} />
+          </label>
+          <Enviar className={botaoSecundario}>Criar regra</Enviar>
+        </Form>
+        <Form action={aplicarRegrasAcao}>
+          <Enviar className={botaoSecundario}>Aplicar regras aos lançamentos sem categoria</Enviar>
+        </Form>
+      </section>
+
       <section className={cartao} aria-labelledby="dados">
         <h2 id="dados" className="mb-2 font-semibold">
           Seus dados
@@ -142,7 +195,11 @@ export default async function Configuracoes() {
           </Enviar>
         </Form>
       </section>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">Regras de categorização e bancos conectados chegam na fase 3.</p>
+      <p className="text-sm">
+        <Link href="/bancos" className={link}>
+          Bancos conectados e autorizações (Open Finance)
+        </Link>
+      </p>
     </>
   );
 }

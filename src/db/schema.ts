@@ -51,6 +51,24 @@ export const tentativaLogin = pgTable(
   (t) => [index().on(t.email, t.criadoEm)],
 );
 
+// Conexão com o agregador (Pluggy). item_id_externo fica criptografado (lib/cripto.ts).
+export const conexaoBanco = pgTable(
+  "conexao_banco",
+  {
+    id: id(),
+    usuarioId: dono(),
+    provedor: text().notNull(), // "pluggy" | "fake"
+    itemIdExterno: text().notNull(),
+    banco: text().notNull().default(""),
+    status: text().notNull().default("pendente"),
+    erro: text(),
+    consentimentoAte: timestamp({ withTimezone: true }),
+    ultimaSincronizacao: timestamp({ withTimezone: true }),
+    criadoEm: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index().on(t.usuarioId)],
+);
+
 export const conta = pgTable(
   "conta",
   {
@@ -61,9 +79,10 @@ export const conta = pgTable(
     // manual: saldo de abertura (o saldo atual soma os lançamentos); open_finance: saldo informado pelo banco.
     saldoCentavos: centavos().notNull().default(0),
     origem: origem().notNull().default("manual"),
-    conexaoId: uuid(),
+    conexaoId: uuid().references(() => conexaoBanco.id, { onDelete: "set null" }),
+    idExterno: text(),
   },
-  (t) => [index().on(t.usuarioId)],
+  (t) => [index().on(t.usuarioId), unique().on(t.conexaoId, t.idExterno)],
 );
 
 export const categoria = pgTable(
@@ -172,7 +191,22 @@ export const cartao = pgTable(
     limiteDisponivelCentavos: centavos(),
     diaFechamento: integer().notNull(),
     diaVencimento: integer().notNull(),
-    conexaoId: uuid(),
+    conexaoId: uuid().references(() => conexaoBanco.id, { onDelete: "set null" }),
+    idExterno: text(),
+  },
+  (t) => [index().on(t.usuarioId), unique().on(t.conexaoId, t.idExterno)],
+);
+
+export const regraCategoria = pgTable(
+  "regra_categoria",
+  {
+    id: id(),
+    usuarioId: dono(),
+    padraoTexto: text().notNull(), // trecho da descrição, sem diferenciar maiúsculas e acentos
+    categoriaId: uuid()
+      .notNull()
+      .references(() => categoria.id, { onDelete: "cascade" }),
+    prioridade: integer().notNull().default(0),
   },
   (t) => [index().on(t.usuarioId)],
 );
@@ -197,9 +231,13 @@ export const transacao = pgTable(
     grupoParcelas: uuid(),
     recorrenciaId: uuid().references(() => recorrencia.id, { onDelete: "set null" }),
     origem: origem().notNull().default("manual"),
+    // anti-duplicata da importação: único por (conexão, id do banco)
+    conexaoId: uuid().references(() => conexaoBanco.id, { onDelete: "set null" }),
+    idExterno: text(),
   },
   (t) => [
     index().on(t.usuarioId, t.data),
+    unique("transacao_conexao_externo").on(t.conexaoId, t.idExterno),
     check("conta_ou_cartao", sql`num_nonnulls(${t.contaId}, ${t.cartaoId}) = 1`),
   ],
 );

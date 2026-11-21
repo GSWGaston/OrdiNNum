@@ -56,6 +56,37 @@ Precisa das suas contas; nada disso foi feito ainda.
   aponte `DATABASE_URL` local para ele e rode `npm run dev`. Os dados daquele horário devem aparecer. Apague o branch.
 - Cópia extra fora do provedor: Ajustes → "Exportar tudo (JSON)" baixa todos os seus dados.
 
+## Open Finance (Pluggy)
+
+Sem chaves da Pluggy, o desenvolvimento usa um **banco simulado** (Bancos → "Conectar banco simulado") e a produção
+mostra "Open Finance não configurado". Para ligar de verdade:
+
+1. Crie conta em **dashboard.pluggy.ai** e uma aplicação. Copie `CLIENT_ID` e `CLIENT_SECRET`.
+2. Na Vercel (Settings → Environment Variables), adicione como **Secret**: `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`,
+   `ENCRYPTION_KEY` (gere como o `AUTH_SECRET`; não troque depois) e `CRON_SECRET` (outro valor aleatório).
+   Para testar com os bancos de teste da Pluggy, `PLUGGY_SANDBOX=true` (usuário `user-ok`, senha `password-ok`).
+3. Redeploy. Em **Bancos**, "Conectar banco" abre o widget da Pluggy.
+4. **Meu Pluggy** (gratuito para uso próprio): conecte seus bancos em meu.pluggy.ai, ligue o Meu Pluggy à sua aplicação
+   no painel da Pluggy e cole o **ID do item** de cada banco em Bancos → "Já conectei pelo Meu Pluggy".
+
+Como funciona (`src/lib/bank/` e `src/lib/dados/conexoes.ts`):
+- `BankProvider` isola o agregador; `PluggyProvider` (API real) e `FakeProvider` (testes) implementam o mesmo contrato.
+- A chave da API fica só no servidor; o navegador recebe só o token curto do widget (30 min). O id do item é guardado
+  criptografado (AES-256-GCM) e nunca vai para a tela nem para a exportação.
+- Sincronização: contas (saldo do banco), cartões (limite e disponível do banco) e transações (`/v2/transactions`).
+  **Sem duplicar**: unicidade `(conexao_id, id_externo)` + upsert. Na janela consultada, o que o banco não devolve mais
+  (ex.: compra pendente cancelada) é apagado. Primeira vez: 12 meses; depois, 30 dias antes da última sincronização.
+- Sinal do valor pelo campo `type` (DEBIT = saída), não pelo sinal de `amount`. Pagamento de fatura e transferência
+  entre contas próprias entram como transferência (fora de receitas/despesas).
+- Lançamento importado: só categoria e observação são editáveis; não se exclui (voltaria). Conta importada: só o nome.
+- Regras de categorização (Ajustes → Regras): aplicadas na importação; categoria escolhida à mão não é trocada.
+- Rotina diária: Vercel Cron chama `/api/cron/sincronizar` às 06h (Brasília) com `Authorization: Bearer CRON_SECRET`.
+  O Meu Pluggy atualiza os bancos a cada 24 h por conta própria.
+- Desconectar revoga a autorização no agregador e pergunta se mantém o histórico (vira manual, com o saldo de hoje) ou
+  apaga o que veio do banco.
+- Alertas do painel: vencimentos em até 3 dias ou atrasados, orçamento ≥ 80%, crédito na faixa vermelha, gasto do dia
+  estourado ou meta impossível, banco com erro e autorização vencendo em 15 dias.
+
 ## Estrutura
 
 ```

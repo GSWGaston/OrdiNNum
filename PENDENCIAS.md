@@ -54,6 +54,20 @@ Comparação da Fase 1 entregue com a especificação (PDF) e o prompt. Cada ite
 | F3 | Crédito consolidado (medidor com faixas, tela Crédito, parcelas futuras por mês) | **Feito.** Medidor no painel, tela Crédito (link no painel e em Contas), faixas ajustáveis por usuário. |
 | F4 | Objetivos (aporte mensal, data estimada, status) | **Feito.** Tela Objetivos (link em Metas e no painel), guardar/retirar, histórico, arquivar. O dinheiro separado sai do saldo livre do gasto diário. **Fase 2 concluída.** |
 
+## H. Fase 3 (Open Finance)
+
+| # | Item | Situação |
+| --- | --- | --- |
+| H1 | `BankProvider`, `PluggyProvider`, `FakeProvider` | **Feito** (Pluggy conforme a documentação lida em 21/11/2026). |
+| H2 | Conexão via widget (sandbox) e Meu Pluggy (colar ID do item) | **Feito no código; não testado com a Pluggy de verdade**: precisa das suas chaves (README, "Open Finance"). Testado com o banco simulado. |
+| H3 | Importar contas, cartões, transações sem duplicar | **Feito** (testes: sincronizar 3 vezes, banco muda valor, pendente some, categoria do usuário mantida). |
+| H4 | Regras de categorização | **Feito** (Ajustes → Regras; aplicar às sem categoria). |
+| H5 | Job periódico | **Feito**: Vercel Cron 1x/dia. Webhooks da Pluggy ficaram de fora (opcionais na spec). |
+| H6 | Consentimentos visíveis, revogar, perguntar se mantém histórico | **Feito** (tela Bancos). |
+| H7 | Alertas (vencimentos, orçamento, crédito alto, gasto diário estourado) | **Feito** no painel (dentro do app; e-mail/push não). |
+| H8 | Critério de pronto: "um banco real sincroniza sem duplicar" | **Falta você**: criar a conta na Pluggy, pôr as chaves na Vercel e conectar um banco real. |
+| H9 | Categorias da própria Pluggy (`category`) | Usadas só para detectar pagamento de fatura/transferência. São recurso pago (Pro); o app categoriza pelas suas regras. |
+
 ## G. Ideias anotadas para depois
 
 | # | Ideia | Fase sugerida |
@@ -67,4 +81,4 @@ Comparação da Fase 1 entregue com a especificação (PDF) e o prompt. Cada ite
 | E1 | Nome do produto (está "Finanças") |
 | E2 | Identidade visual (está verde-esmeralda neutro, fonte do sistema) |
 | E3 | Haverá plano pago no futuro? |
-| E4 | Quais bancos são prioridade na fase 3? |
+| E4 | Quais bancos são prioridade na fase 3? (a Pluggy cobre os principais; vale saber quais você usa para testar primeiro) |

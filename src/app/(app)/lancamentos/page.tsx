@@ -113,6 +113,7 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                         {formatarData(t.data)} · {t.categoriaId ? nomeCat.get(t.categoriaId) : "Sem categoria"} ·{" "}
                         {nomeConta.get((t.contaId ?? t.cartaoId)!)}
                         {t.data > dia && " · futuro"}
+                        {t.origem === "open_finance" && " · 🔗 do banco"}
                       </span>
                     </span>
                     <Valor centavos={t.valorCentavos} className="font-semibold" />
@@ -123,6 +124,28 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                       Transferência (entre contas ou pagamento de fatura): só move dinheiro, não conta como receita nem despesa.
                       Para corrigir, exclua (as duas pontas saem juntas) e registre de novo em Contas.
                     </p>
+                  ) : t.origem === "open_finance" ? (
+                    <Form action={editarLancamento} className="mt-3 flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+                      {/* veio do banco: valor, data e conta são do banco; aqui só categoria e observação */}
+                      <input type="hidden" name="id" value={t.id} />
+                      <input type="hidden" name="tipo" value={t.valorCentavos < 0 ? "despesa" : "receita"} />
+                      <input type="hidden" name="valor" value={centavosParaTexto(Math.abs(t.valorCentavos))} />
+                      <input type="hidden" name="data" value={t.data} />
+                      <input type="hidden" name="onde" value={ondeDe(t)} />
+                      <input type="hidden" name="descricao" value={t.descricao} />
+                      <label className={rotulo}>
+                        Categoria
+                        <SelectCategoria categorias={categorias} defaultValue={t.categoriaId} />
+                      </label>
+                      <label className={rotulo}>
+                        Observação
+                        <input name="observacao" maxLength={1000} defaultValue={t.observacao ?? ""} className={campo} />
+                      </label>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                        Veio do banco: valor e data seguem o banco. Para categorizar sozinho da próxima vez, crie uma regra em Ajustes.
+                      </p>
+                      <Enviar>Salvar</Enviar>
+                    </Form>
                   ) : (
                   <Form action={editarLancamento} className="mt-3 flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
                     <input type="hidden" name="id" value={t.id} />
@@ -156,6 +179,7 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                     <Enviar>Salvar alterações</Enviar>
                   </Form>
                   )}
+                  {t.origem === "manual" && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Form action={removerLancamento}>
                       <input type="hidden" name="id" value={t.id} />
@@ -172,6 +196,7 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                       </Form>
                     )}
                   </div>
+                  )}
                 </details>
               </li>
             ))}

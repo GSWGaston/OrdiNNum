@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { aporteObjetivo, cartao, categoria, conta, metaMensal, objetivo, orcamentoCategoria, recorrencia, transacao, usuario } from "@/db/schema";
+import { aporteObjetivo, cartao, categoria, conexaoBanco, conta, metaMensal, objetivo, orcamentoCategoria, recorrencia, regraCategoria, transacao, usuario } from "@/db/schema";
 
 const PADRAO: [string, "receita" | "despesa", string, string[]][] = [
   ["Moradia", "despesa", "#8b5cf6", ["Aluguel", "Luz", "Água", "Internet"]],
@@ -51,6 +51,12 @@ export async function exportarDados(db: Db, uid: string) {
     orcamentos: await db.select().from(orcamentoCategoria).where(eq(orcamentoCategoria.usuarioId, uid)),
     objetivos: await db.select().from(objetivo).where(eq(objetivo.usuarioId, uid)),
     aportes: await db.select().from(aporteObjetivo).where(eq(aporteObjetivo.usuarioId, uid)),
+    regras: await db.select().from(regraCategoria).where(eq(regraCategoria.usuarioId, uid)),
+    // o id do item no agregador fica de fora: é credencial de acesso, não dado do usuário
+    conexoes: await db
+      .select({ banco: conexaoBanco.banco, provedor: conexaoBanco.provedor, status: conexaoBanco.status, consentimentoAte: conexaoBanco.consentimentoAte, ultimaSincronizacao: conexaoBanco.ultimaSincronizacao })
+      .from(conexaoBanco)
+      .where(eq(conexaoBanco.usuarioId, uid)),
     transacoes: await db.select().from(transacao).where(eq(transacao.usuarioId, uid)).orderBy(asc(transacao.data)),
   };
 }

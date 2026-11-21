@@ -62,6 +62,16 @@ export function criarTransacao(db: Db, uid: string, d: DadosTransacao & { parcel
 
 /** Edita um lançamento comum. Metades de transferência (pagamento de fatura) não se editam: exclua e refaça. */
 export async function atualizarTransacao(db: Db, uid: string, id: string, d: DadosTransacao) {
+  const [atual] = await db.select({ origem: transacao.origem }).from(transacao).where(and(eq(transacao.id, id), eq(transacao.usuarioId, uid)));
+  if (atual?.origem === "open_finance") {
+    // veio do banco: valor, data e conta são do banco (a próxima sincronização sobrescreveria); só categoria e observação
+    if (d.categoriaId) await categoriaDoUsuario(db, uid, d.categoriaId);
+    await db
+      .update(transacao)
+      .set({ categoriaId: d.categoriaId, observacao: d.observacao })
+      .where(and(eq(transacao.id, id), eq(transacao.usuarioId, uid)));
+    return;
+  }
   await conferir(db, uid, d);
   await db
     .update(transacao)
@@ -74,8 +84,8 @@ export async function excluirTransacao(db: Db, uid: string, id: string) {
   const [t] = await db
     .select({ transferenciaId: transacao.transferenciaId })
     .from(transacao)
-    .where(and(eq(transacao.id, id), eq(transacao.usuarioId, uid)));
-  if (!t) return;
+    .where(and(eq(transacao.id, id), eq(transacao.usuarioId, uid), eq(transacao.origem, "manual")));
+  if (!t) return; // lançamento do banco não se exclui aqui (voltaria na próxima sincronização)
   await db
     .delete(transacao)
     .where(and(eq(transacao.usuarioId, uid), t.transferenciaId ? eq(transacao.transferenciaId, t.transferenciaId) : eq(transacao.id, id)));

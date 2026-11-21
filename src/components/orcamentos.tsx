@@ -1,7 +1,5 @@
-import Link from "next/link";
 import type { progressoOrcamentos } from "@/lib/calculos/orcamento";
 import { formatarReais } from "@/lib/formato";
-import { cartao, link } from "./estilos";
 
 export type Progresso = ReturnType<typeof progressoOrcamentos>[number];
 
@@ -44,25 +42,5 @@ export function BarraOrcamento({ p, nome, cor }: { p: Progresso; nome: string; c
         {p.restante >= 0 ? `Restam ${formatarReais(p.restante)} (${p.pct}% usado)` : `Passou ${formatarReais(-p.restante)} (${p.pct}%)`}
       </p>
     </div>
-  );
-}
-
-/** Painel: só as categorias que já passaram de 80%. */
-export function AlertasOrcamento({ progresso, categorias }: { progresso: Progresso[]; categorias: Map<string, { nome: string; cor: string }> }) {
-  const alertas = progresso.filter((p) => p.estado !== "ok");
-  if (!alertas.length) return null;
-  return (
-    <section className={`${cartao} flex flex-col gap-3`} aria-labelledby="alertas-orc">
-      <h2 id="alertas-orc" className="font-semibold">
-        Limites de categoria
-      </h2>
-      {alertas.map((p) => {
-        const c = categorias.get(p.categoriaId);
-        return <BarraOrcamento key={p.categoriaId} p={p} nome={c?.nome ?? "?"} cor={c?.cor ?? "#a1a1aa"} />;
-      })}
-      <Link href="/orcamento#limites" className={`${link} text-xs`}>
-        Ver todos os limites
-      </Link>
-    </section>
   );
 }
