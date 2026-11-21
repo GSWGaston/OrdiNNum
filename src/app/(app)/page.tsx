@@ -15,7 +15,7 @@ import { listarObjetivos } from "@/lib/dados/objetivos";
 import { Valor, Vazio } from "@/components/ui";
 import { db } from "@/db";
 import { hoje, limitesDoMes, mesPorExtenso, mesValido, nomeDoMes, somarDias, somarMesesAoMes } from "@/lib/calculos/datas";
-import { despesasPorCategoria, previstosAte, resumoDoMes } from "@/lib/calculos/resumo";
+import { despesasPorCategoria, previstosAte, resumoDoMes, semPagamentosDeFatura } from "@/lib/calculos/resumo";
 import { listarCartoes } from "@/lib/dados/cartoes";
 import { listarCategorias } from "@/lib/dados/categorias";
 import { listarContas } from "@/lib/dados/contas";
@@ -73,8 +73,9 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   const aPagarAte = (ate: string) =>
     [...previstosAte(recorrencias, ate), ...faturas.filter((f) => f.data <= ate)].sort((a, b) => a.data.localeCompare(b.data));
   const previstosMes = ehMesAtual ? aPagarAte(fim) : [];
-  const r = resumoDoMes(lancamentos, previstosMes, saldoAtual, dia);
-  const porCategoria = despesasPorCategoria(lancamentos, categorias);
+  const doMes = cartoes.length ? semPagamentosDeFatura(lancamentos, categorias) : lancamentos;
+  const r = resumoDoMes(doMes, previstosMes, saldoAtual, dia);
+  const porCategoria = despesasPorCategoria(doMes, categorias);
   const nomeCat = new Map(categorias.map((c) => [c.id, c]));
   const proximos = aPagarAte(somarDias(dia, 30)).slice(0, 6);
 

@@ -46,6 +46,20 @@ export function resumoDoMes(lancamentos: Lancamento[], previstos: { valorCentavo
   };
 }
 
+/**
+ * Saída de conta na categoria "Fatura" (ou subcategoria) é pagamento de cartão: as compras já contaram como despesa
+ * no dia em que foram feitas, então o pagamento vira transferência no resumo (senão o gasto conta duas vezes).
+ * Vale para o pagamento sem par (o banco do cartão nem sempre manda o lado dele).
+ */
+export function semPagamentosDeFatura<T extends Lancamento>(lancamentos: T[], categorias: { id: string; nome: string; paiId: string | null }[]): T[] {
+  const ehFatura = (n: string) => n.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase() === "fatura";
+  const raiz = new Set(categorias.filter((c) => ehFatura(c.nome)).map((c) => c.id));
+  const ids = new Set(categorias.filter((c) => raiz.has(c.id) || (c.paiId && raiz.has(c.paiId))).map((c) => c.id));
+  return lancamentos.map((l) =>
+    l.contaId && l.valorCentavos < 0 && !l.transferenciaId && l.categoriaId && ids.has(l.categoriaId) ? { ...l, transferenciaId: "fatura" } : l,
+  );
+}
+
 /** Despesas do mês agrupadas pela categoria raiz (subcategoria soma no pai). Maior primeiro. */
 export function despesasPorCategoria(lancamentos: Lancamento[], categorias: { id: string; paiId: string | null }[]) {
   const pai = new Map(categorias.map((c) => [c.id, c.paiId]));

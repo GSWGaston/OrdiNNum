@@ -322,3 +322,13 @@ describe("formato", () => {
     expect(centavosParaTexto(-123405)).toBe("-1234,05");
   });
 });
+
+describe("pagamento de fatura sem par", () => {
+  it("saída de conta em Fatura (ou subcategoria) não conta como despesa; cartão e entrada não mudam", async () => {
+    const { semPagamentosDeFatura } = await import("./resumo");
+    const cats = [{ id: "f", nome: "Fatura", paiId: null }, { id: "fn", nome: "Nubank", paiId: "f" }, { id: "m", nome: "Mercado", paiId: null }];
+    const l = (valorCentavos: number, categoriaId: string, contaId: string | null = "c") => ({ data: "2026-11-05", valorCentavos, categoriaId, contaId, transferenciaId: null });
+    const lancs = semPagamentosDeFatura([l(-50000, "f"), l(-10000, "fn"), l(-3000, "m"), l(-2000, "f", null), l(500, "f")], cats);
+    expect(resumoDoMes(lancs, [], 0, "2026-11-30")).toMatchObject({ despesas: 5000, receitas: 500 });
+  });
+});
