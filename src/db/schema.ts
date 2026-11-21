@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
+  check,
   date,
   foreignKey,
   index,
@@ -81,14 +83,33 @@ export const recorrencia = pgTable(
   (t) => [index().on(t.usuarioId)],
 );
 
+export const cartao = pgTable(
+  "cartao",
+  {
+    id: id(),
+    usuarioId: dono(),
+    nome: text().notNull(),
+    bandeira: text().notNull(),
+    limiteTotalCentavos: centavos().notNull(),
+    // null = cartão manual: o disponível é calculado (limite - faturas abertas - parcelas futuras)
+    limiteDisponivelCentavos: centavos(),
+    diaFechamento: integer().notNull(),
+    diaVencimento: integer().notNull(),
+    conexaoId: uuid(),
+  },
+  (t) => [index().on(t.usuarioId)],
+);
+
 export const transacao = pgTable(
   "transacao",
   {
     id: id(),
     usuarioId: dono(),
-    contaId: uuid()
-      .notNull()
-      .references(() => conta.id, { onDelete: "cascade" }),
+    // exatamente um dos dois (check abaixo)
+    contaId: uuid().references(() => conta.id, { onDelete: "cascade" }),
+    cartaoId: uuid().references(() => cartao.id, { onDelete: "cascade" }),
+    // par de lançamentos que só move dinheiro (ex.: pagamento de fatura): fora de receitas/despesas
+    transferenciaId: uuid(),
     data: date().notNull(),
     valorCentavos: centavos().notNull(), // negativo = saída
     descricao: text().notNull().default(""),
@@ -100,5 +121,8 @@ export const transacao = pgTable(
     recorrenciaId: uuid().references(() => recorrencia.id, { onDelete: "set null" }),
     origem: origem().notNull().default("manual"),
   },
-  (t) => [index().on(t.usuarioId, t.data)],
+  (t) => [
+    index().on(t.usuarioId, t.data),
+    check("conta_ou_cartao", sql`num_nonnulls(${t.contaId}, ${t.cartaoId}) = 1`),
+  ],
 );

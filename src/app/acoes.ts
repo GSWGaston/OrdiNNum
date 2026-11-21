@@ -10,6 +10,7 @@ import { db } from "@/db";
 import { lerReais } from "@/lib/formato";
 import { atualizarCategoria, criarCategoria, excluirCategoria } from "@/lib/dados/categorias";
 import { ErroDados } from "@/lib/dados/comum";
+import { atualizarCartao, criarCartao, excluirCartao, pagarFatura } from "@/lib/dados/cartoes";
 import { atualizarConta, criarConta, excluirConta } from "@/lib/dados/contas";
 import { criarRecorrencia, excluirRecorrencia, lancarRecorrencia } from "@/lib/dados/recorrencias";
 import {
@@ -41,11 +42,21 @@ const cor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Cor inválida.");
 
 const comSinal = (t: "despesa" | "receita", v: number) => (t === "despesa" ? -v : v);
 
+// "conta:<id>" ou "cartao:<id>" (um select só para os dois)
+const onde = z
+  .string()
+  .regex(/^(conta|cartao):[0-9a-f-]{36}$/i, "Escolha uma conta ou um cartão.")
+  .transform((s) => {
+    const [t, oid] = s.split(":") as [string, string];
+    return t === "conta" ? { contaId: oid, cartaoId: null } : { contaId: null, cartaoId: oid };
+  });
+const diaDoMes = z.coerce.number().int().min(1, "Dia entre 1 e 31.").max(31, "Dia entre 1 e 31.");
+
 const lancamento = z.object({
   tipo,
   valor,
   data: dia,
-  contaId: z.uuid({ error: "Escolha uma conta." }),
+  onde,
   categoriaId: idOpcional,
   descricao: texto(200).default(""),
   observacao: z.preprocess(vazioParaNulo, texto(1000).nullable()).default(null),
@@ -131,6 +142,38 @@ export async function removerConta(_: Estado, fd: FormData) {
   return rodar((uid) => excluirConta(db, uid, p.data), "Conta excluída.");
 }
 
+// ---------- cartões ----------
+
+const cartaoForm = z.object({
+  id: idOpcional,
+  nome: texto(80).min(1, "Informe o nome do cartão."),
+  bandeira: texto(30).min(1, "Escolha a bandeira."),
+  limite: valor,
+  diaFechamento: diaDoMes,
+  diaVencimento: diaDoMes,
+});
+
+export async function salvarCartao(_: Estado, fd: FormData) {
+  const p = ler(cartaoForm, fd);
+  if (!p.success) return { erro: msg(p.error) };
+  const { id: cid, limite, ...d } = p.data;
+  const dados = { ...d, limiteTotalCentavos: limite };
+  return rodar((uid) => (cid ? atualizarCartao(db, uid, cid, dados) : criarCartao(db, uid, dados)), "Cartão salvo.");
+}
+
+export async function removerCartao(_: Estado, fd: FormData) {
+  const p = id.safeParse(fd.get("id"));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => excluirCartao(db, uid, p.data), "Cartão excluído.");
+}
+
+export async function pagarFaturaAcao(_: Estado, fd: FormData) {
+  const p = ler(z.object({ cartaoId: id, contaId: z.uuid({ error: "Escolha a conta de onde sai o pagamento." }), valor, data: dia }), fd);
+  if (!p.success) return { erro: msg(p.error) };
+  const { valor: v, ...d } = p.data;
+  return rodar((uid) => pagarFatura(db, uid, { ...d, valorCentavos: v }), "Pagamento registrado.");
+}
+
 // ---------- lançamentos ----------
 
 export async function novoLancamento(_: Estado, fd: FormData): Promise<Estado> {
@@ -139,8 +182,8 @@ export async function novoLancamento(_: Estado, fd: FormData): Promise<Estado> {
     fd,
   );
   if (!p.success) return { erro: msg(p.error) };
-  const { tipo: t, valor: v, parcelas, ...d } = p.data;
-  const r = await rodar((uid) => criarTransacao(db, uid, { ...d, valorCentavos: comSinal(t, v), parcelas: parcelas ?? 1 }));
+  const { tipo: t, valor: v, parcelas, onde: o, ...d } = p.data;
+  const r = await rodar((uid) => criarTransacao(db, uid, { ...d, ...o, valorCentavos: comSinal(t, v), parcelas: parcelas ?? 1 }));
   if (r?.erro) return r;
   redirect(fd.get("continuar") ? "/lancamentos/novo?salvo=1" : "/");
 }
@@ -148,8 +191,8 @@ export async function novoLancamento(_: Estado, fd: FormData): Promise<Estado> {
 export async function editarLancamento(_: Estado, fd: FormData) {
   const p = ler(lancamento.extend({ id }), fd);
   if (!p.success) return { erro: msg(p.error) };
-  const { id: tid, tipo: t, valor: v, ...d } = p.data;
-  return rodar((uid) => atualizarTransacao(db, uid, tid, { ...d, valorCentavos: comSinal(t, v) }));
+  const { id: tid, tipo: t, valor: v, onde: o, ...d } = p.data;
+  return rodar((uid) => atualizarTransacao(db, uid, tid, { ...d, ...o, valorCentavos: comSinal(t, v) }));
 }
 
 export async function removerLancamento(_: Estado, fd: FormData) {

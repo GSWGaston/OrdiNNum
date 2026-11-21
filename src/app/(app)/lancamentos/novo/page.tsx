@@ -1,9 +1,10 @@
 import { novoLancamento } from "@/app/acoes";
 import { botaoSecundario, campo, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
-import { SelectCategoria, SelectConta, Tipo, Vazio } from "@/components/ui";
+import { SelectCategoria, SelectOnde, Tipo, Vazio } from "@/components/ui";
 import { db } from "@/db";
 import { hoje } from "@/lib/calculos/datas";
+import { listarCartoes } from "@/lib/dados/cartoes";
 import { listarCategorias } from "@/lib/dados/categorias";
 import { listarContas } from "@/lib/dados/contas";
 import { exigirUsuario } from "@/lib/sessao";
@@ -13,7 +14,7 @@ export const metadata = { title: "Novo lançamento" };
 export default async function NovoLancamento({ searchParams }: { searchParams: Promise<{ salvo?: string }> }) {
   const uid = await exigirUsuario();
   const dia = hoje();
-  const [contas, categorias] = await Promise.all([listarContas(db, uid, dia), listarCategorias(db, uid)]);
+  const [contas, cartoes, categorias] = await Promise.all([listarContas(db, uid, dia), listarCartoes(db, uid), listarCategorias(db, uid)]);
   const { salvo } = await searchParams;
 
   if (!contas.length)
@@ -39,8 +40,8 @@ export default async function NovoLancamento({ searchParams }: { searchParams: P
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className={rotulo}>
-            Conta
-            <SelectConta contas={contas} />
+            Conta/cartão
+            <SelectOnde contas={contas} cartoes={cartoes} />
           </label>
           <label className={rotulo}>
             Data

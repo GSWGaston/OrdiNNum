@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { categoria, conta } from "@/db/schema";
+import { cartao, categoria, conta } from "@/db/schema";
 
 /** Erro com mensagem segura para mostrar ao usuário. */
 export class ErroDados extends Error {}
@@ -9,6 +9,15 @@ export class ErroDados extends Error {}
 export async function contaDoUsuario(db: Db, uid: string, id: string) {
   const [c] = await db.select({ id: conta.id }).from(conta).where(and(eq(conta.id, id), eq(conta.usuarioId, uid)));
   if (!c) throw new ErroDados("Conta não encontrada.");
+}
+
+export async function cartaoDoUsuario(db: Db, uid: string, id: string) {
+  const [c] = await db
+    .select({ id: cartao.id, nome: cartao.nome })
+    .from(cartao)
+    .where(and(eq(cartao.id, id), eq(cartao.usuarioId, uid)));
+  if (!c) throw new ErroDados("Cartão não encontrado.");
+  return c;
 }
 
 export async function categoriaDoUsuario(db: Db, uid: string, id: string) {

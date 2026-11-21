@@ -69,6 +69,41 @@ export function SelectConta({
   );
 }
 
+/** Conta ou cartão num select só; valor "conta:<id>" ou "cartao:<id>". */
+export function SelectOnde({
+  contas,
+  cartoes,
+  defaultValue,
+}: {
+  contas: { id: string; nome: string }[];
+  cartoes: { id: string; nome: string }[];
+  defaultValue?: string;
+}) {
+  return (
+    <select name="onde" defaultValue={defaultValue} className={campo} required>
+      <optgroup label="Contas">
+        {contas.map((c) => (
+          <option key={c.id} value={`conta:${c.id}`}>
+            {c.nome}
+          </option>
+        ))}
+      </optgroup>
+      {cartoes.length > 0 && (
+        <optgroup label="Cartões de crédito">
+          {cartoes.map((c) => (
+            <option key={c.id} value={`cartao:${c.id}`}>
+              💳 {c.nome}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  );
+}
+
+export const ondeDe = (t: { contaId: string | null; cartaoId: string | null }) =>
+  t.contaId ? `conta:${t.contaId}` : `cartao:${t.cartaoId}`;
+
 /** Estado vazio que ensina o próximo passo. */
 export function Vazio({ titulo, texto, href, acao }: { titulo: string; texto: string; href: string; acao: string }) {
   return (

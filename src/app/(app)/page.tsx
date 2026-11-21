@@ -4,6 +4,7 @@ import { Valor, Vazio } from "@/components/ui";
 import { db } from "@/db";
 import { hoje, limitesDoMes, mesValido, nomeDoMes, somarDias, somarMesesAoMes } from "@/lib/calculos/datas";
 import { despesasPorCategoria, previstosAte, resumoDoMes } from "@/lib/calculos/resumo";
+import { listarCartoes } from "@/lib/dados/cartoes";
 import { listarCategorias } from "@/lib/dados/categorias";
 import { listarContas } from "@/lib/dados/contas";
 import { listarRecorrencias } from "@/lib/dados/recorrencias";
@@ -19,8 +20,9 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   const mes = mesValido(mesParam) ? mesParam : mesAtual;
   const { fim } = limitesDoMes(mes);
 
-  const [contas, lancamentos, recorrencias, categorias] = await Promise.all([
+  const [contas, cartoes, lancamentos, recorrencias, categorias] = await Promise.all([
     listarContas(db, uid, dia),
+    listarCartoes(db, uid),
     listarTransacoes(db, uid, { mes }),
     listarRecorrencias(db, uid),
     listarCategorias(db, uid),
@@ -38,11 +40,19 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
 
   const saldoAtual = contas.reduce((s, c) => s + c.saldoAtual, 0);
   const ehMesAtual = mes === mesAtual;
-  const previstosMes = ehMesAtual ? previstosAte(recorrencias, fim) : [];
+  // faturas abertas entram como compromisso a pagar (a compra já foi despesa no dia em que foi feita)
+  const faturas = cartoes.flatMap((c) =>
+    c.faturas
+      .filter((f) => f.aberto > 0)
+      .map((f) => ({ id: `${c.id}-${f.vencimento}`, descricao: `Fatura ${c.nome}`, data: f.vencimento, valorCentavos: -f.aberto })),
+  );
+  const aPagarAte = (ate: string) =>
+    [...previstosAte(recorrencias, ate), ...faturas.filter((f) => f.data <= ate)].sort((a, b) => a.data.localeCompare(b.data));
+  const previstosMes = ehMesAtual ? aPagarAte(fim) : [];
   const r = resumoDoMes(lancamentos, previstosMes, saldoAtual, dia);
   const porCategoria = despesasPorCategoria(lancamentos, categorias);
   const nomeCat = new Map(categorias.map((c) => [c.id, c]));
-  const proximos = previstosAte(recorrencias, somarDias(dia, 30)).slice(0, 6);
+  const proximos = aPagarAte(somarDias(dia, 30)).slice(0, 6);
 
   return (
     <>
@@ -92,7 +102,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
               <Valor centavos={r.saldoFimDoMes} />
             </p>
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              Saldo de hoje + lançamentos futuros + recorrências a lançar ({formatarReais(r.previstoReceitas)} a receber,{" "}
+              Saldo de hoje + lançamentos futuros + recorrências e faturas até o fim do mês ({formatarReais(r.previstoReceitas)} a receber,{" "}
               {formatarReais(r.previstoDespesas)} a pagar)
             </p>
           </div>

@@ -5,6 +5,7 @@
 import bcrypt from "bcryptjs";
 import { db } from "../src/db";
 import { hoje, limitesDoMes, somarMesesAoMes } from "../src/lib/calculos/datas";
+import { criarCartao, listarCartoes, pagarFatura } from "../src/lib/dados/cartoes";
 import { listarCategorias } from "../src/lib/dados/categorias";
 import { criarConta, listarContas } from "../src/lib/dados/contas";
 import { criarRecorrencia } from "../src/lib/dados/recorrencias";
@@ -46,12 +47,24 @@ async function main() {
     [d(mes, 18), -3800, "Restaurante", "[exemplo] Café", vale!.id],
   ];
   for (const [data, valorCentavos, c, descricao, contaId] of lancs)
-    await criarTransacao(db, uid, { data, valorCentavos, categoriaId: cat.get(c) ?? null, descricao, contaId, observacao: null, parcelas: 1 });
+    await criarTransacao(db, uid, { data, valorCentavos, categoriaId: cat.get(c) ?? null, descricao, contaId, cartaoId: null, observacao: null, parcelas: 1 });
 
   await criarTransacao(db, uid, {
     data: d(mes, 3), valorCentavos: -120000, categoriaId: cat.get("Outros") ?? null, descricao: "[exemplo] Geladeira 6x",
-    contaId: corrente!.id, observacao: "parcelado no boleto", parcelas: 6,
+    contaId: corrente!.id, cartaoId: null, observacao: "parcelado no boleto", parcelas: 6,
   });
+
+  await criarCartao(db, uid, { nome: "[exemplo] Cartão", bandeira: "Mastercard", limiteTotalCentavos: 500000, diaFechamento: 3, diaVencimento: 10 });
+  const [cartao] = await listarCartoes(db, uid);
+  const noCartao: [string, number, string, string, number][] = [
+    [d(ant, 20), -25000, "Mercado", "[exemplo] Mercado no cartão", 1],
+    [d(mes, 4), -18000, "Restaurante", "[exemplo] Jantar", 1],
+    [d(mes, 12), -9990, "Assinaturas", "[exemplo] Música", 1],
+    [d(mes, 15), -90000, "Outros", "[exemplo] Fone 3x", 3],
+  ];
+  for (const [data, valorCentavos, c, descricao, parcelas] of noCartao)
+    await criarTransacao(db, uid, { data, valorCentavos, categoriaId: cat.get(c) ?? null, descricao, contaId: null, cartaoId: cartao!.id, observacao: null, parcelas });
+  await pagarFatura(db, uid, { cartaoId: cartao!.id, contaId: corrente!.id, valorCentavos: 25000, data: d(mes, 10) });
 
   const prox = somarMesesAoMes(mes, 1);
   await criarRecorrencia(db, uid, { descricao: "[exemplo] Aluguel", valorCentavos: -180000, periodicidade: "mensal", proximaData: d(mes, 10), contaId: corrente!.id, categoriaId: cat.get("Aluguel") ?? null });

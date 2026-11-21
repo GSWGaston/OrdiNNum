@@ -4,6 +4,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import * as schema from "@/db/schema";
+import { atualizarCartao, criarCartao, excluirCartao, listarCartoes, pagarFatura } from "./cartoes";
 import { atualizarCategoria, criarCategoria, excluirCategoria, listarCategorias } from "./categorias";
 import { ErroDados } from "./comum";
 import { atualizarConta, criarConta, excluirConta, listarContas } from "./contas";
@@ -24,8 +25,10 @@ async function novoUsuario(email: string) {
   const uid = await criarUsuario(db, { nome: email, email, senhaHash: "hash-de-teste" });
   await criarConta(db, uid, { nome: `Conta ${email}`, tipo: "corrente", saldoCentavos: 100000 });
   const [c] = await listarContas(db, uid, "2026-12-31");
+  await criarCartao(db, uid, { nome: `Cartão ${email}`, bandeira: "Visa", limiteTotalCentavos: 500000, diaFechamento: 3, diaVencimento: 10 });
+  const [cartao] = await listarCartoes(db, uid);
   const cats = await listarCategorias(db, uid);
-  return { uid, conta: c!, despesa: cats.find((x) => x.nome === "Aluguel")!, receita: cats.find((x) => x.nome === "Salário")! };
+  return { uid, conta: c!, cartao: cartao!, despesa: cats.find((x) => x.nome === "Aluguel")!, receita: cats.find((x) => x.nome === "Salário")! };
 }
 
 beforeAll(async () => {
@@ -43,10 +46,12 @@ describe("isolamento entre usuários", () => {
   beforeAll(async () => {
     a = await novoUsuario("a@exemplo.test");
     b = await novoUsuario("b@exemplo.test");
-    const base = { contaId: b.conta.id, categoriaId: b.despesa.id, observacao: null };
+    const base = { contaId: b.conta.id, cartaoId: null, categoriaId: b.despesa.id, observacao: null };
     await criarTransacao(db, b.uid, { ...base, data: "2026-11-10", valorCentavos: -5000, descricao: "segredo de B", parcelas: 1 });
     await criarTransacao(db, b.uid, { ...base, data: "2026-11-11", valorCentavos: -3000, descricao: "parcelado B", parcelas: 3 });
-    await criarRecorrencia(db, b.uid, { ...base, descricao: "aluguel B", valorCentavos: -150000, periodicidade: "mensal", proximaData: "2026-11-05" });
+    await criarTransacao(db, b.uid, { ...base, contaId: null, cartaoId: b.cartao.id, data: "2026-11-12", valorCentavos: -7000, descricao: "cartão B", parcelas: 1 });
+    await pagarFatura(db, b.uid, { cartaoId: b.cartao.id, contaId: b.conta.id, valorCentavos: 7000, data: "2026-11-13" });
+    await criarRecorrencia(db, b.uid, { contaId: b.conta.id, categoriaId: b.despesa.id, descricao: "aluguel B", valorCentavos: -150000, periodicidade: "mensal", proximaData: "2026-11-05" });
     txB = (await listarTransacoes(db, b.uid, { mes: "2026-11", texto: "segredo" }))[0]!;
     recB = (await listarRecorrencias(db, b.uid))[0]!;
   });
@@ -54,6 +59,7 @@ describe("isolamento entre usuários", () => {
   async function estadoDeB() {
     return {
       contas: await listarContas(db, b.uid, "2026-12-31"),
+      cartoes: await listarCartoes(db, b.uid),
       categorias: await listarCategorias(db, b.uid),
       transacoes: await listarTransacoes(db, b.uid, { mes: "2026-11" }),
       recorrencias: await listarRecorrencias(db, b.uid),
@@ -67,23 +73,29 @@ describe("isolamento entre usuários", () => {
     expect(await listarTransacoes(db, a.uid, { mes: "2026-11", contaId: b.conta.id })).toEqual([]);
     expect(await listarTransacoes(db, a.uid, { mes: "2026-11", categoriaId: b.despesa.id })).toEqual([]);
     expect(await listarRecorrencias(db, a.uid)).toEqual([]);
+    expect((await listarCartoes(db, a.uid)).map((c) => c.id)).toEqual([a.cartao.id]);
+    expect(await listarTransacoes(db, a.uid, { mes: "2026-11", contaId: b.cartao.id })).toEqual([]);
     const idsB = new Set((await listarCategorias(db, b.uid)).map((c) => c.id));
     expect((await listarCategorias(db, a.uid)).some((c) => idsB.has(c.id))).toBe(false);
     const exportado = JSON.stringify(await exportarDados(db, a.uid));
     expect(exportado).not.toContain("segredo de B");
     expect(exportado).not.toContain(b.conta.id);
+    expect(exportado).not.toContain(b.cartao.id);
     expect(exportado).not.toContain("hash-de-teste");
   });
 
   it("A não altera nem apaga dados de B", async () => {
     const antes = await estadoDeB();
-    const dadosA = { contaId: a.conta.id, categoriaId: null, data: "2026-11-01", valorCentavos: -1, descricao: "x", observacao: null };
+    const dadosA = { contaId: a.conta.id, cartaoId: null, categoriaId: null, data: "2026-11-01", valorCentavos: -1, descricao: "x", observacao: null };
     await atualizarTransacao(db, a.uid, txB.id, dadosA);
     await excluirTransacao(db, a.uid, txB.id);
     await excluirParcelamento(db, a.uid, antes.transacoes.find((t) => t.grupoParcelas)!.grupoParcelas!);
     await categorizarEmLote(db, a.uid, [txB.id], a.despesa.id);
     await atualizarConta(db, a.uid, b.conta.id, { nome: "hackeada", tipo: "dinheiro", saldoCentavos: 0 });
     await excluirConta(db, a.uid, b.conta.id);
+    await atualizarCartao(db, a.uid, b.cartao.id, { nome: "hackeado", bandeira: "x", limiteTotalCentavos: 1, diaFechamento: 1, diaVencimento: 1 });
+    await excluirCartao(db, a.uid, b.cartao.id);
+    for (const t of antes.transacoes) await excluirTransacao(db, a.uid, t.id);
     await atualizarCategoria(db, a.uid, b.despesa.id, { nome: "hackeada", cor: "#000000" });
     await excluirCategoria(db, a.uid, b.despesa.id);
     await excluirRecorrencia(db, a.uid, recB.id);
@@ -91,7 +103,11 @@ describe("isolamento entre usuários", () => {
   });
 
   it("A não lança nem referencia conta/categoria/recorrência de B", async () => {
-    const base = { data: "2026-11-01", valorCentavos: -1, descricao: "x", observacao: null, parcelas: 1 };
+    const base = { data: "2026-11-01", valorCentavos: -1, descricao: "x", observacao: null, parcelas: 1, cartaoId: null };
+    await expect(criarTransacao(db, a.uid, { ...base, contaId: null, cartaoId: b.cartao.id, categoriaId: null })).rejects.toThrow(ErroDados);
+    await expect(criarTransacao(db, a.uid, { ...base, contaId: null, categoriaId: null })).rejects.toThrow(ErroDados);
+    await expect(pagarFatura(db, a.uid, { cartaoId: b.cartao.id, contaId: a.conta.id, valorCentavos: 1, data: "2026-11-01" })).rejects.toThrow(ErroDados);
+    await expect(pagarFatura(db, a.uid, { cartaoId: a.cartao.id, contaId: b.conta.id, valorCentavos: 1, data: "2026-11-01" })).rejects.toThrow(ErroDados);
     await expect(criarTransacao(db, a.uid, { ...base, contaId: b.conta.id, categoriaId: null })).rejects.toThrow(ErroDados);
     await expect(criarTransacao(db, a.uid, { ...base, contaId: a.conta.id, categoriaId: b.despesa.id })).rejects.toThrow(ErroDados);
     await expect(atualizarTransacao(db, a.uid, txB.id, { ...base, contaId: b.conta.id, categoriaId: null })).rejects.toThrow(ErroDados);
@@ -106,7 +122,7 @@ describe("isolamento entre usuários", () => {
   it("excluir a conta do usuário apaga todos os dados dele e só dele", async () => {
     await excluirUsuario(db, b.uid);
     const e = await exportarDados(db, b.uid);
-    expect(e).toEqual({ usuario: undefined, contas: [], categorias: [], recorrencias: [], transacoes: [] });
+    expect(e).toEqual({ usuario: undefined, contas: [], cartoes: [], categorias: [], recorrencias: [], transacoes: [] });
     expect(await listarContas(db, a.uid, "2026-12-31")).toHaveLength(1);
   });
 });
@@ -114,7 +130,7 @@ describe("isolamento entre usuários", () => {
 describe("um mês inteiro lançado dá o saldo correto", () => {
   it("saldo, parcelas e recorrência", async () => {
     const u = await novoUsuario("mes@exemplo.test"); // saldo de abertura R$ 1.000,00
-    const base = { contaId: u.conta.id, observacao: null, parcelas: 1 };
+    const base = { contaId: u.conta.id, cartaoId: null, observacao: null, parcelas: 1 };
     await criarTransacao(db, u.uid, { ...base, categoriaId: u.receita.id, data: "2026-11-05", valorCentavos: 500000, descricao: "Salário" });
     await criarTransacao(db, u.uid, { ...base, categoriaId: u.despesa.id, data: "2026-11-06", valorCentavos: -12345, descricao: "Mercado" });
     await criarTransacao(db, u.uid, { ...base, categoriaId: null, data: "2026-11-20", valorCentavos: -30000, descricao: "TV", parcelas: 3 });
@@ -140,5 +156,32 @@ describe("um mês inteiro lançado dá o saldo correto", () => {
     expect(await listarTransacoes(db, u.uid, { mes: "2026-11", categoriaId: moradia.id })).toHaveLength(2);
     // texto com curinga é literal
     expect(await listarTransacoes(db, u.uid, { mes: "2026-11", texto: "%" })).toEqual([]);
+  });
+
+  it("cartão: compra não mexe no saldo da conta; pagar fatura sim, e o par se apaga junto", async () => {
+    const u = await novoUsuario("cartao@exemplo.test"); // conta com R$ 1.000,00, cartão fecha 3 vence 10
+    const noCartao = { contaId: null, cartaoId: u.cartao.id, categoriaId: null, observacao: null, descricao: "compra" };
+    await criarTransacao(db, u.uid, { ...noCartao, data: "2026-11-05", valorCentavos: -60000, parcelas: 3 }); // faturas dez, jan, fev
+    let [cartao] = await listarCartoes(db, u.uid);
+    expect(cartao!.devido).toBe(60000);
+    expect(cartao!.disponivel).toBe(440000);
+    expect((await listarContas(db, u.uid, "2027-12-31"))[0]!.saldoAtual).toBe(100000);
+
+    await pagarFatura(db, u.uid, { cartaoId: u.cartao.id, contaId: u.conta.id, valorCentavos: 20000, data: "2026-12-10" });
+    [cartao] = await listarCartoes(db, u.uid);
+    expect(cartao!.faturas.map((f) => f.aberto)).toEqual([0, 20000, 20000]);
+    expect((await listarContas(db, u.uid, "2027-12-31"))[0]!.saldoAtual).toBe(80000);
+
+    const pagamento = (await listarTransacoes(db, u.uid, { mes: "2026-12", contaId: u.conta.id }))[0]!;
+    expect(pagamento.transferenciaId).not.toBeNull();
+    await atualizarTransacao(db, u.uid, pagamento.id, { ...noCartao, contaId: u.conta.id, cartaoId: null, data: "2026-12-10", valorCentavos: -1 });
+    expect((await listarTransacoes(db, u.uid, { mes: "2026-12", contaId: u.conta.id }))[0]!.valorCentavos).toBe(-20000); // não edita transferência
+    await excluirTransacao(db, u.uid, pagamento.id);
+    expect((await listarTransacoes(db, u.uid, { mes: "2026-12" })).filter((t) => t.transferenciaId)).toEqual([]);
+
+    // mover uma compra do cartão para a conta
+    const compra = (await listarTransacoes(db, u.uid, { mes: "2026-11" }))[0]!;
+    await atualizarTransacao(db, u.uid, compra.id, { ...noCartao, contaId: u.conta.id, cartaoId: null, data: compra.data, valorCentavos: compra.valorCentavos });
+    expect((await listarContas(db, u.uid, "2026-11-30"))[0]!.saldoAtual).toBe(80000);
   });
 });

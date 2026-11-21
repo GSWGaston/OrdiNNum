@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hoje, limitesDoMes, ocorrenciasAte, proximaData, somarMeses, somarMesesAoMes } from "./datas";
+import { faturaDaCompra, resumoDoCartao } from "./cartao";
 import { gerarParcelas } from "./parcelas";
 import { despesasPorCategoria, previstosAte, resumoDoMes, saldoDaConta } from "./resumo";
 import { centavosParaTexto, formatarData, formatarReais, lerReais } from "../formato";
@@ -46,8 +47,21 @@ describe("resumo do mês", () => {
     { valorCentavos: 500000, data: "2026-11-05", categoriaId: "sal" },
     { valorCentavos: -150000, data: "2026-11-06", categoriaId: "aluguel" },
     { valorCentavos: -20000, data: "2026-11-10", categoriaId: "luz" },
-    { valorCentavos: -5000, data: "2026-11-25", categoriaId: null },
+    { valorCentavos: -5000, data: "2026-11-25", categoriaId: null, contaId: "c" },
   ];
+  it("cartão é despesa na compra, não mexe no saldo; pagamento de fatura não é despesa", () => {
+    const comCartao = [
+      ...lancs,
+      { valorCentavos: -7000, data: "2026-11-26", categoriaId: "luz", contaId: null }, // compra futura no cartão
+      { valorCentavos: -9000, data: "2026-11-27", categoriaId: null, contaId: "c", transferenciaId: "t" }, // paga fatura
+      { valorCentavos: 9000, data: "2026-11-27", categoriaId: null, contaId: null, transferenciaId: "t" },
+    ];
+    const r = resumoDoMes(comCartao, [], 1000000, "2026-11-21");
+    expect(r.despesas).toBe(175000 + 7000);
+    expect(r.receitas).toBe(500000);
+    expect(r.saldoFimDoMes).toBe(1000000 - 5000 - 9000);
+    expect(despesasPorCategoria(comCartao, [{ id: "luz", paiId: null }]).find((p) => p.categoriaId === null)!.total).toBe(5000);
+  });
   it("receitas, despesas, saldo e projeção", () => {
     const previstos = [{ valorCentavos: -9990 }, { valorCentavos: 30000 }];
     const r = resumoDoMes(lancs, previstos, 1000000, "2026-11-21");
@@ -80,6 +94,40 @@ describe("resumo do mês", () => {
   it("saldo da conta manual soma lançamentos; do banco usa o informado", () => {
     expect(saldoDaConta({ origem: "manual", saldoCentavos: 1000 }, -300)).toBe(700);
     expect(saldoDaConta({ origem: "open_finance", saldoCentavos: 1000 }, -300)).toBe(1000);
+  });
+});
+
+describe("cartão", () => {
+  it("compra antes do fechamento cai na fatura do mês; no dia ou depois, na seguinte", () => {
+    expect(faturaDaCompra("2026-11-02", 3, 10)).toEqual({ fechamento: "2026-11-03", vencimento: "2026-11-10" });
+    expect(faturaDaCompra("2026-11-03", 3, 10)).toEqual({ fechamento: "2026-12-03", vencimento: "2026-12-10" });
+    // fecha 25, vence 5 do mês seguinte
+    expect(faturaDaCompra("2026-12-20", 25, 5)).toEqual({ fechamento: "2026-12-25", vencimento: "2027-01-05" });
+    // dia 31 em fevereiro vira 28
+    expect(faturaDaCompra("2026-02-10", 31, 8)).toEqual({ fechamento: "2026-02-28", vencimento: "2026-03-08" });
+  });
+  const c = { limiteTotalCentavos: 500000, limiteDisponivelCentavos: null, diaFechamento: 3, diaVencimento: 10 };
+  it("faturas, pagamento quita a mais antiga, limite e uso", () => {
+    const r = resumoDoCartao(c, [
+      { data: "2026-10-20", valorCentavos: -30000 }, // fatura 10/11
+      { data: "2026-11-15", valorCentavos: -10000 }, // fatura 10/12
+      { data: "2026-12-15", valorCentavos: -10000 }, // parcela futura, fatura 10/01
+      { data: "2026-11-10", valorCentavos: 35000 }, // pagamento: quita 10/11 e 5.000 da de 10/12
+    ]);
+    expect(r.faturas.map((f) => [f.vencimento, f.total, f.aberto])).toEqual([
+      ["2026-11-10", 30000, 0],
+      ["2026-12-10", 10000, 5000],
+      ["2027-01-10", 10000, 10000],
+    ]);
+    expect(r.devido).toBe(15000);
+    expect(r.disponivel).toBe(485000);
+    expect(r.usoPct).toBe(3);
+  });
+  it("cartão do banco usa o disponível informado; pagamento a mais vira crédito", () => {
+    expect(resumoDoCartao({ ...c, limiteDisponivelCentavos: 400000 }, [{ data: "2026-11-01", valorCentavos: -1 }]).disponivel).toBe(400000);
+    const r = resumoDoCartao(c, [{ data: "2026-11-01", valorCentavos: -1000 }, { data: "2026-11-05", valorCentavos: 1500 }]);
+    expect(r.devido).toBe(-500);
+    expect(r.disponivel).toBe(500500);
   });
 });
 

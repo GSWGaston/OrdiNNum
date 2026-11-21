@@ -1,6 +1,12 @@
 import { ocorrenciasAte, type Periodicidade } from "./datas";
 
-export type Lancamento = { valorCentavos: number; data: string; categoriaId: string | null };
+export type Lancamento = {
+  valorCentavos: number;
+  data: string;
+  categoriaId: string | null;
+  contaId?: string | null; // null = lançamento de cartão (não mexe no saldo das contas)
+  transferenciaId?: string | null; // pagamento de fatura etc.: não é receita nem despesa
+};
 export type RecorrenciaBase = { id: string; descricao: string; valorCentavos: number; periodicidade: Periodicidade; proximaData: string };
 
 /** Saldo atual: conta manual soma os lançamentos até hoje ao saldo de abertura; conta do banco usa o saldo informado. */
@@ -23,9 +29,11 @@ export function resumoDoMes(lancamentos: Lancamento[], previstos: { valorCentavo
   let despesas = 0;
   let futuros = 0;
   for (const l of lancamentos) {
+    if (l.data > hoje && l.contaId) futuros += l.valorCentavos;
+    if (l.transferenciaId) continue;
+    // compra no cartão conta como despesa no dia da compra; a fatura entra só como compromisso a pagar
     if (l.valorCentavos >= 0) receitas += l.valorCentavos;
     else despesas -= l.valorCentavos;
-    if (l.data > hoje) futuros += l.valorCentavos;
   }
   const somaPrevistos = previstos.reduce((s, p) => s + p.valorCentavos, 0);
   return {
@@ -43,7 +51,7 @@ export function despesasPorCategoria(lancamentos: Lancamento[], categorias: { id
   const pai = new Map(categorias.map((c) => [c.id, c.paiId]));
   const totais = new Map<string | null, number>();
   for (const l of lancamentos) {
-    if (l.valorCentavos >= 0) continue;
+    if (l.valorCentavos >= 0 || l.transferenciaId) continue;
     const raiz = l.categoriaId ? (pai.get(l.categoriaId) ?? l.categoriaId) : null;
     totais.set(raiz, (totais.get(raiz) ?? 0) - l.valorCentavos);
   }

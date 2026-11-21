@@ -19,20 +19,20 @@ export async function GET(req: Request) {
 
   if (!csv) return Response.json(dados, { headers: cabecalhos });
 
-  const conta = new Map(dados.contas.map((c) => [c.id, c.nome]));
+  const conta = new Map([...dados.contas, ...dados.cartoes].map((c) => [c.id, c.nome]));
   const cat = new Map(dados.categorias.map((c) => [c.id, c.nome]));
   const linhas = dados.transacoes.map((t) =>
     [
       t.data,
       cel(t.descricao),
       centavosParaTexto(t.valorCentavos),
-      cel(conta.get(t.contaId)),
+      cel(conta.get((t.contaId ?? t.cartaoId)!)),
       cel(t.categoriaId ? cat.get(t.categoriaId) : ""),
       t.parcelasTotal ? `${t.parcelaAtual}/${t.parcelasTotal}` : "",
       cel(t.observacao),
     ].join(";"),
   );
   // BOM + ";" + vírgula decimal: abre direto no Excel em português.
-  const corpo = "﻿" + ["data;descricao;valor;conta;categoria;parcela;observacao", ...linhas].join("\r\n");
+  const corpo = "﻿" + ["data;descricao;valor;conta_ou_cartao;categoria;parcela;observacao", ...linhas].join("\r\n");
   return new Response(corpo, { headers: { ...cabecalhos, "Content-Type": "text/csv; charset=utf-8" } });
 }

@@ -68,3 +68,24 @@ test("login, filtro e categorização em lote; outro usuário não vê nada", as
   await expect(outro.getByText("Nenhum lançamento aqui")).toBeVisible();
   await outro.close();
 });
+
+test("cartão: compra é despesa no dia e não mexe no saldo da conta", async ({ page }) => {
+  await cadastrar(page);
+  await criarConta(page, "Conta C", "500,00");
+  const form = page.locator("section", { has: page.getByRole("heading", { name: "Adicionar cartão de crédito" }) });
+  await form.getByLabel("Nome").fill("Cartão Teste");
+  await form.getByLabel("Limite total (R$)").fill("2.000");
+  await form.getByLabel("Dia do fechamento").fill("3");
+  await form.getByLabel("Dia do vencimento").fill("10");
+  await form.getByRole("button", { name: "Adicionar cartão" }).click();
+  await expect(page.getByText("💳 Cartão Teste")).toBeVisible();
+
+  await page.goto("/");
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
+  await page.getByLabel("Valor (R$)").fill("80");
+  await page.getByLabel("Conta/cartão").selectOption({ label: "💳 Cartão Teste" });
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(page.getByTestId("saldo-mes")).toHaveText(/-R\$\s80,00/);
+  await expect(page.getByTestId("saldo-contas")).toHaveText(/\+R\$\s500,00/);
+  await expect(page.getByText(/Fatura Cartão Teste/)).toBeVisible();
+});

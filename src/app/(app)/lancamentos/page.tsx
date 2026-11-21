@@ -2,9 +2,10 @@ import Link from "next/link";
 import { categorizarLote, editarLancamento, removerLancamento } from "@/app/acoes";
 import { botao, botaoPerigo, botaoSecundario, campo, cartao, link, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
-import { SelectCategoria, SelectConta, Tipo, Valor, Vazio } from "@/components/ui";
+import { ondeDe, SelectCategoria, SelectConta, SelectOnde, Tipo, Valor, Vazio } from "@/components/ui";
 import { db } from "@/db";
 import { hoje, mesValido, nomeDoMes } from "@/lib/calculos/datas";
+import { listarCartoes } from "@/lib/dados/cartoes";
 import { listarCategorias } from "@/lib/dados/categorias";
 import { listarContas } from "@/lib/dados/contas";
 import { listarTransacoes } from "@/lib/dados/transacoes";
@@ -23,15 +24,17 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
   const mes = mesValido(sp.mes) ? sp.mes : dia.slice(0, 7);
   const filtro = { mes, contaId: uuid(sp.conta), categoriaId: uuid(sp.categoria), texto: sp.q?.trim().slice(0, 100) || undefined };
 
-  const [lista, contas, categorias] = await Promise.all([
+  const [lista, contas, cartoes, categorias] = await Promise.all([
     listarTransacoes(db, uid, filtro),
     listarContas(db, uid, dia),
+    listarCartoes(db, uid),
     listarCategorias(db, uid),
   ]);
-  const nomeConta = new Map(contas.map((c) => [c.id, c.nome]));
+  const nomeConta = new Map([...contas, ...cartoes.map((c) => ({ ...c, nome: `💳 ${c.nome}` }))].map((c) => [c.id, c.nome]));
+  const doMes = lista.filter((t) => !t.transferenciaId);
   const nomeCat = new Map(categorias.map((c) => [c.id, c.nome]));
-  const entradas = lista.filter((t) => t.valorCentavos > 0).reduce((s, t) => s + t.valorCentavos, 0);
-  const saidas = lista.filter((t) => t.valorCentavos < 0).reduce((s, t) => s - t.valorCentavos, 0);
+  const entradas = doMes.filter((t) => t.valorCentavos > 0).reduce((s, t) => s + t.valorCentavos, 0);
+  const saidas = doMes.filter((t) => t.valorCentavos < 0).reduce((s, t) => s - t.valorCentavos, 0);
 
   return (
     <>
@@ -43,8 +46,8 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
           <input type="month" name="mes" defaultValue={mes} className={campo} />
         </label>
         <label className={rotulo}>
-          Conta
-          <SelectConta contas={contas} name="conta" defaultValue={filtro.contaId} vazio="Todas" />
+          Conta/cartão
+          <SelectConta contas={[...contas, ...cartoes]} name="conta" defaultValue={filtro.contaId} vazio="Todas" />
         </label>
         <label className={rotulo}>
           Categoria
@@ -108,13 +111,19 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                       </span>
                       <span className="text-xs text-zinc-600 dark:text-zinc-400">
                         {formatarData(t.data)} · {t.categoriaId ? nomeCat.get(t.categoriaId) : "Sem categoria"} ·{" "}
-                        {nomeConta.get(t.contaId)}
+                        {nomeConta.get((t.contaId ?? t.cartaoId)!)}
                         {t.data > dia && " · futuro"}
                       </span>
                     </span>
                     <Valor centavos={t.valorCentavos} className="font-semibold" />
                   </summary>
 
+                  {t.transferenciaId ? (
+                    <p className="mt-3 border-t border-zinc-200 pt-3 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+                      Pagamento de fatura: só move dinheiro da conta para o cartão, não conta como despesa. Para corrigir, exclua
+                      (as duas pontas saem juntas) e registre de novo em Contas.
+                    </p>
+                  ) : (
                   <Form action={editarLancamento} className="mt-3 flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
                     <input type="hidden" name="id" value={t.id} />
                     <Tipo defaultValue={t.valorCentavos < 0 ? "despesa" : "receita"} />
@@ -132,8 +141,8 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                         <SelectCategoria categorias={categorias} defaultValue={t.categoriaId} />
                       </label>
                       <label className={rotulo}>
-                        Conta
-                        <SelectConta contas={contas} defaultValue={t.contaId} />
+                        Conta/cartão
+                        <SelectOnde contas={contas} cartoes={cartoes} defaultValue={ondeDe(t)} />
                       </label>
                     </div>
                     <label className={rotulo}>
@@ -146,6 +155,7 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                     </label>
                     <Enviar>Salvar alterações</Enviar>
                   </Form>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Form action={removerLancamento}>
                       <input type="hidden" name="id" value={t.id} />
