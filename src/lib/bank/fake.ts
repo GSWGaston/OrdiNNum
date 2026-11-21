@@ -47,8 +47,8 @@ export class FakeProvider implements BankProvider {
   async listarContas() {
     return this.dados.contas;
   }
-  async listarTransacoes(conta: string, desde: string) {
-    return (this.dados.transacoes[conta] ?? []).filter((t) => t.data >= desde);
+  async listarTransacoes(conta: { idExterno: string }, desde: string) {
+    return (this.dados.transacoes[conta.idExterno] ?? []).filter((t) => t.data >= desde);
   }
   async excluirItem() {}
 }

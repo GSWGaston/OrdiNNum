@@ -1,6 +1,6 @@
 import "server-only";
 import { converterContaPluggy, converterItemPluggy, converterTransacaoPluggy, type ContaPluggy, type ItemPluggy, type TransacaoPluggy } from "./pluggy-converter";
-import type { BankProvider } from "./tipos";
+import type { BankProvider, ContaBanco } from "./tipos";
 
 // Documentação: https://docs.pluggy.ai (lida em 21/11/2026). Chaves só no servidor (env), nunca no navegador.
 const API = "https://api.pluggy.ai";
@@ -56,15 +56,15 @@ export class PluggyProvider implements BankProvider {
   }
 
   /** /v2/transactions com cursor (o /transactions antigo sai do ar em 31/12/2026). */
-  async listarTransacoes(contaIdExterna: string, desde: string) {
+  async listarTransacoes(conta: Pick<ContaBanco, "idExterno" | "tipo">, desde: string) {
     const todas: TransacaoPluggy[] = [];
-    let caminho: string | null = `/v2/transactions?accountId=${encodeURIComponent(contaIdExterna)}&dateFrom=${desde}`;
+    let caminho: string | null = `/v2/transactions?accountId=${encodeURIComponent(conta.idExterno)}&dateFrom=${desde}`;
     for (let i = 0; caminho && i < 100; i++) {
       const r: { results: TransacaoPluggy[]; next: string | null } = await this.chamar(caminho);
       todas.push(...r.results);
       caminho = r.next ? `/v2/transactions${r.next.startsWith("?") ? r.next : `?${r.next}`}` : null;
     }
-    return todas.map(converterTransacaoPluggy);
+    return todas.map((t) => converterTransacaoPluggy(t, conta.tipo));
   }
 
   async excluirItem(itemId: string) {

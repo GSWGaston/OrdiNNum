@@ -5,19 +5,23 @@ import { cifrar, decifrar } from "@/lib/cripto";
 import { converterContaPluggy, converterItemPluggy, converterTransacaoPluggy } from "./pluggy-converter";
 
 describe("conversão Pluggy", () => {
-  it("sinal pelo type: compra no cartão (amount positivo) vira saída; pagamento vira entrada e transferência", () => {
-    const compra = converterTransacaoPluggy({ id: "a", description: " MERCADO ", amount: 75, type: "DEBIT", date: "2026-11-21T02:00:00.000Z" });
-    expect(compra).toMatchObject({ valorCentavos: -7500, descricao: "MERCADO", ehTransferencia: false, data: "2026-11-20" }); // 02h UTC = dia 20 em SP
-    // sandbox às vezes manda compra negativa: o type decide
-    expect(converterTransacaoPluggy({ id: "b", description: "NETFLIX", amount: -55.9, type: "DEBIT", date: "2026-11-10T12:00:00Z" }).valorCentavos).toBe(-5590);
-    const pagamento = converterTransacaoPluggy({ id: "c", description: "Pagamento", amount: -150, type: "CREDIT", date: "2026-11-10T12:00:00Z", operationType: "PAGAMENTO_FATURA" });
-    expect(pagamento).toMatchObject({ valorCentavos: 15000, ehTransferencia: true });
-    expect(converterTransacaoPluggy({ id: "d", description: "PIX", amount: -10, type: "DEBIT", date: "2026-11-10T12:00:00Z", category: "Same person transfer - PIX" }).ehTransferencia).toBe(true);
+  const t = (extra: Partial<Parameters<typeof converterTransacaoPluggy>[0]>) => ({ id: "x", description: "X", amount: 0, type: "DEBIT" as const, date: "2026-11-10T12:00:00Z", ...extra });
+  it("conta: sinal pelo type; data no fuso de São Paulo", () => {
+    expect(converterTransacaoPluggy(t({ description: " MERCADO ", amount: -75, date: "2026-11-21T02:00:00.000Z" }), "conta")).toMatchObject({ valorCentavos: -7500, descricao: "MERCADO", data: "2026-11-20" });
+    expect(converterTransacaoPluggy(t({ amount: 8500, type: "CREDIT" }), "conta").valorCentavos).toBe(850000);
+    expect(converterTransacaoPluggy(t({ amount: -10, category: "Same person transfer - PIX" }), "conta")).toMatchObject({ valorCentavos: -1000, ehTransferencia: true });
+  });
+  it("cartão: compra é saída qualquer que seja o sinal ou o type; pagamento e estorno são entrada", () => {
+    // caso real do sandbox: SMART FIT veio com type CREDIT e entrou como receita antes da correção
+    expect(converterTransacaoPluggy(t({ description: "SMART FIT ACADEMIA", amount: 89.9, type: "CREDIT" }), "cartao").valorCentavos).toBe(-8990);
+    expect(converterTransacaoPluggy(t({ description: "NETFLIX", amount: -55.9, type: "DEBIT" }), "cartao").valorCentavos).toBe(-5590);
+    expect(converterTransacaoPluggy(t({ description: "Pagamento recebido", amount: -150, type: "CREDIT", operationType: "PAGAMENTO_FATURA" }), "cartao")).toMatchObject({ valorCentavos: 15000, ehTransferencia: true });
+    expect(converterTransacaoPluggy(t({ description: "ESTORNO LOJA X", amount: -40, type: "CREDIT" }), "cartao")).toMatchObject({ valorCentavos: 4000, ehTransferencia: false });
   });
   it("parcelas do cartão", () => {
-    const p = converterTransacaoPluggy({ id: "e", description: "LOJA", amount: 100, type: "DEBIT", date: "2026-11-10T12:00:00Z", creditCardMetadata: { installmentNumber: 2, totalInstallments: 5 } });
+    const p = converterTransacaoPluggy(t({ amount: 100, creditCardMetadata: { installmentNumber: 2, totalInstallments: 5 } }), "cartao");
     expect([p.parcelaAtual, p.parcelasTotal]).toEqual([2, 5]);
-    const avista = converterTransacaoPluggy({ id: "f", description: "LOJA", amount: 100, type: "DEBIT", date: "2026-11-10T12:00:00Z", creditCardMetadata: { installmentNumber: 1, totalInstallments: 1 } });
+    const avista = converterTransacaoPluggy(t({ amount: 100, creditCardMetadata: { installmentNumber: 1, totalInstallments: 1 } }), "cartao");
     expect([avista.parcelaAtual, avista.parcelasTotal]).toEqual([null, null]);
   });
   it("contas e cartões", () => {

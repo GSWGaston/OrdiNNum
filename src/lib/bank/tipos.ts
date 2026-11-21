@@ -42,7 +42,7 @@ export interface BankProvider {
   criarTokenConexao(o: { clientUserId: string; itemId?: string }): Promise<string | null>;
   buscarItem(itemId: string): Promise<ItemBanco>;
   listarContas(itemId: string): Promise<ContaBanco[]>;
-  listarTransacoes(contaIdExterna: string, desde: string): Promise<TransacaoBanco[]>;
+  listarTransacoes(conta: Pick<ContaBanco, "idExterno" | "tipo">, desde: string): Promise<TransacaoBanco[]>;
   /** revoga o consentimento e apaga a conexão no agregador */
   excluirItem(itemId: string): Promise<void>;
 }

@@ -74,7 +74,7 @@ export async function sincronizarConexao(db: Db, uid: string, conexaoId: string,
   const desde = cx.ultimaSincronizacao ? somarDias(hojeSP(cx.ultimaSincronizacao), -30) : somarDias(dia, -365);
   try {
     const [item, contasBanco, regras] = await Promise.all([provedor.buscarItem(itemId), provedor.listarContas(itemId), listarRegras(db, uid)]);
-    const transacoesPorConta = await Promise.all(contasBanco.map((c) => provedor.listarTransacoes(c.idExterno, desde)));
+    const transacoesPorConta = await Promise.all(contasBanco.map((c) => provedor.listarTransacoes(c, desde)));
     let importadas = 0;
 
     await db.transaction(async (tx) => {

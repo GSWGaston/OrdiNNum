@@ -81,20 +81,26 @@ export function converterContaPluggy(a: ContaPluggy): ContaBanco {
 
 const TRANSFERENCIA = /credit card payment|pagamento de fatura|same person transfer|mesma titularidade/i;
 
+const ESTORNO = /estorno|reembolso|cashback|devolu[cç][aã]o|cr[eé]dito de/i;
+
 /**
- * Sinal pelo campo `type` (DEBIT = saída, CREDIT = entrada) e não pelo sinal de `amount`: no cartão a Pluggy usa
- * positivo = compra, e o sandbox às vezes contradiz isso. No app, saída é sempre negativa.
+ * No app, saída é sempre negativa.
+ * - Conta: sinal pelo `type` (DEBIT = saída, CREDIT = entrada).
+ * - Cartão: nem o sinal de `amount` nem o `type` são confiáveis (docs dizem positivo = compra; o sandbox manda
+ *   compra com type CREDIT e às vezes amount negativo). Então: tudo é compra, menos pagamento de fatura e estorno.
  */
-export function converterTransacaoPluggy(t: TransacaoPluggy): TransacaoBanco {
+export function converterTransacaoPluggy(t: TransacaoPluggy, tipoConta: "conta" | "cartao"): TransacaoBanco {
   const valor = Math.abs(centavos(t.amount));
   const m = t.creditCardMetadata;
+  const ehTransferencia = t.operationType === "PAGAMENTO_FATURA" || TRANSFERENCIA.test(t.category ?? "");
+  const entrada = tipoConta === "conta" ? t.type === "CREDIT" : ehTransferencia || ESTORNO.test(`${t.description} ${t.category ?? ""}`);
   return {
     idExterno: t.id,
     data: hoje(new Date(t.date)), // data vem em UTC; o dia que vale é o de São Paulo
-    valorCentavos: t.type === "DEBIT" ? -valor : valor,
+    valorCentavos: entrada ? valor : -valor,
     descricao: t.description.trim(),
     categoriaBanco: t.category ?? null,
-    ehTransferencia: t.operationType === "PAGAMENTO_FATURA" || TRANSFERENCIA.test(t.category ?? ""),
+    ehTransferencia,
     parcelaAtual: m?.totalInstallments && m.totalInstallments > 1 ? (m.installmentNumber ?? null) : null,
     parcelasTotal: m?.totalInstallments && m.totalInstallments > 1 ? m.totalInstallments : null,
   };
