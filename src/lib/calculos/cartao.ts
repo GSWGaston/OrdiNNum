@@ -45,11 +45,12 @@ export function resumoDoCartao(c: CartaoBase, lancamentos: { data: string; valor
     const aberto = c.faturaAbertaCentavos ?? 0;
     // nem todo banco manda o vencimento junto com o valor: sem ele, usa o dia de vencimento do cartão
     const vencimento = c.faturaVencimento ?? (hoje ? proximoDia(hoje, c.diaVencimento) : null);
-    let faturas: Fatura[] = aberto > 0 && vencimento ? [{ fechamento: null, vencimento, total: aberto, aberto }] : [];
-    if (!faturas.length && hoje) {
-      // banco não informou a fatura (ex.: Nubank via Open Finance): calcula pelas compras, com os dias de fechamento e
-      // vencimento do cartão. Faturas já vencidas contam como pagas (o Open Finance não manda os pagamentos no cartão).
-      const porVenc = new Map<string, Fatura>();
+    const doBanco: Fatura[] = aberto > 0 && vencimento ? [{ fechamento: null, vencimento, total: aberto, aberto }] : [];
+    // pelas compras, com os dias de fechamento e vencimento do cartão; faturas já vencidas contam como pagas
+    // (o Open Finance não manda os pagamentos no cartão). Usado quando o banco não informa (ex.: Nubank) e mostrado
+    // ao lado do valor do banco para conferência.
+    const porVenc = new Map<string, Fatura>();
+    if (hoje)
       for (const l of lancamentos) {
         if (l.valorCentavos >= 0) continue;
         const f = faturaDaCompra(l.data, c.diaFechamento, c.diaVencimento);
@@ -59,11 +60,11 @@ export function resumoDoCartao(c: CartaoBase, lancamentos: { data: string; valor
         x.aberto = x.total;
         porVenc.set(f.vencimento, x);
       }
-      faturas = [...porVenc.values()].sort((a, b) => a.vencimento.localeCompare(b.vencimento));
-    }
+    const calculadas = [...porVenc.values()].sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+    const faturas = doBanco.length ? doBanco : calculadas;
     const devido = c.limiteTotalCentavos - c.limiteDisponivelCentavos;
     const usoPct = c.limiteTotalCentavos > 0 ? (devido / c.limiteTotalCentavos) * 100 : 0;
-    return { faturas, devido, disponivel: c.limiteDisponivelCentavos, usoPct };
+    return { faturas, devido, disponivel: c.limiteDisponivelCentavos, usoPct, origemFatura: doBanco.length ? ("banco" as const) : ("compras" as const), faturaPelasCompras: calculadas[0] ?? null };
   }
   const porVencimento = new Map<string, { fechamento: string; vencimento: string; total: number }>();
   let creditos = 0;

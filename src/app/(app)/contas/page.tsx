@@ -274,6 +274,28 @@ export default async function Contas() {
                     <dd className="tabular font-semibold">{formatarReais(depois)}</dd>
                   </div>
                 </dl>
+                {c.conexaoId && "origemFatura" in c && (
+                  <details className="mt-2 text-xs">
+                    <summary className="cursor-pointer text-zinc-600 dark:text-zinc-400">O que o banco informou (para conferir)</summary>
+                    <dl className="tabular mt-1 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
+                      <dt>Limite total do banco</dt>
+                      <dd className="text-right">{formatarReais(c.limiteDoBancoCentavos)}</dd>
+                      <dt>Limite disponível do banco</dt>
+                      <dd className="text-right">{formatarReais(c.limiteDisponivelCentavos ?? 0)}</dd>
+                      <dt>Fatura aberta do banco</dt>
+                      <dd className="text-right">
+                        {c.faturaAbertaCentavos ? formatarReais(c.faturaAbertaCentavos) : "não informou"}
+                        {c.faturaVencimento ? ` · vence ${formatarData(c.faturaVencimento)}` : ""}
+                      </dd>
+                      <dt>Fatura pelas compras (fecha dia {c.diaFechamento})</dt>
+                      <dd className="text-right">
+                        {c.faturaPelasCompras ? `${formatarReais(c.faturaPelasCompras.aberto)} · vence ${formatarData(c.faturaPelasCompras.vencimento)}` : "nenhuma compra"}
+                      </dd>
+                      <dt>O app está usando</dt>
+                      <dd className="text-right">{c.origemFatura === "banco" ? "a fatura do banco" : "a fatura pelas compras"}</dd>
+                    </dl>
+                  </details>
+                )}
 
                 {aPagar && contas.length > 0 && c.limiteDisponivelCentavos === null && (
                   <Form action={pagarFaturaAcao} className="mt-3 flex flex-wrap items-end gap-2">
