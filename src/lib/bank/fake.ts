@@ -14,7 +14,7 @@ export function dadosExemplo(dia = hoje()): DadosFake {
     item: { banco: "Banco Simulado", status: "atualizado", erro: null, consentimentoAte: new Date(`${somarDias(dia, 360)}T00:00:00Z`), clientUserId: null },
     contas: [
       { idExterno: "cc-1", nome: "Conta Simulada", tipo: "conta", subtipo: "corrente", saldoCentavos: 234567 },
-      { idExterno: "cartao-1", nome: "Cartão Simulado •1234", tipo: "cartao", bandeira: "Mastercard", limiteTotalCentavos: 300000, limiteDisponivelCentavos: 241010, diaFechamento: null, diaVencimento: 10 },
+      { idExterno: "cartao-1", nome: "Cartão Simulado •1234", tipo: "cartao", bandeira: "Mastercard", limiteTotalCentavos: 300000, limiteDisponivelCentavos: 241010, diaFechamento: null, diaVencimento: 10, faturaAbertaCentavos: 37990, faturaVencimento: somarDias(dia, 19) },
     ],
     transacoes: {
       "cc-1": [

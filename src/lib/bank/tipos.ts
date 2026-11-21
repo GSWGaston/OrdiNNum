@@ -21,6 +21,8 @@ export type ContaBanco = {
       limiteDisponivelCentavos: number | null;
       diaFechamento: number | null;
       diaVencimento: number | null;
+      faturaAbertaCentavos: number; // valor ainda não pago da fatura atual
+      faturaVencimento: string | null;
     }
 );
 

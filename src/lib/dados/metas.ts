@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, isNotNull, lte, sum } from "drizzle-orm";
 import type { Db } from "@/db";
-import { metaMensal, transacao } from "@/db/schema";
+import { cartao, metaMensal, transacao } from "@/db/schema";
 import { calcularGastoDiario, type Meta } from "@/lib/calculos/gastoDiario";
 import { limitesDoMes } from "@/lib/calculos/datas";
 import { previstosAte } from "@/lib/calculos/resumo";
@@ -26,14 +26,28 @@ export async function metaVigente(db: Db, uid: string, mes: string) {
   return m ? { modo: m.modo, valorCentavos: m.valorCentavos, herdada: m.mes !== mes } : null;
 }
 
-/** Quanto se deve em cada cartão por compras até `ate` (cartão com crédito sobrando não abate o de outro). */
+/**
+ * Quanto se deve nos cartões (cartão com crédito sobrando não abate o de outro).
+ * Manual: compras - pagamentos até `ate`. Do banco: limite usado informado pelo banco (o histórico não traz os
+ * pagamentos de fatura, então somar as compras daria uma dívida que já foi paga).
+ */
 async function dividaCartoesAte(db: Db, uid: string, ate: string) {
-  const porCartao = await db
-    .select({ total: sum(transacao.valorCentavos).mapWith(Number) })
-    .from(transacao)
-    .where(and(eq(transacao.usuarioId, uid), isNotNull(transacao.cartaoId), lte(transacao.data, ate)))
-    .groupBy(transacao.cartaoId);
-  return porCartao.reduce((s, c) => s + Math.max(0, -c.total), 0);
+  const [cartoes, porCartao] = await Promise.all([
+    db
+      .select({ id: cartao.id, limite: cartao.limiteTotalCentavos, disponivel: cartao.limiteDisponivelCentavos })
+      .from(cartao)
+      .where(eq(cartao.usuarioId, uid)),
+    db
+      .select({ cartaoId: transacao.cartaoId, total: sum(transacao.valorCentavos).mapWith(Number) })
+      .from(transacao)
+      .where(and(eq(transacao.usuarioId, uid), isNotNull(transacao.cartaoId), lte(transacao.data, ate)))
+      .groupBy(transacao.cartaoId),
+  ]);
+  const soma = new Map(porCartao.map((p) => [p.cartaoId, p.total]));
+  return cartoes.reduce(
+    (s, c) => s + Math.max(0, c.disponivel !== null ? c.limite - c.disponivel : -(soma.get(c.id) ?? 0)),
+    0,
+  );
 }
 
 /** Junta os dados do mês e calcula o gasto diário de `hoje`. null se não há meta definida. */

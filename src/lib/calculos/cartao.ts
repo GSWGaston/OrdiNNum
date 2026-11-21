@@ -21,14 +21,27 @@ export type CartaoBase = {
   limiteDisponivelCentavos: number | null;
   diaFechamento: number;
   diaVencimento: number;
+  faturaAbertaCentavos?: number | null;
+  faturaVencimento?: string | null;
 };
+
+export type Fatura = { fechamento: string | null; vencimento: string; total: number; aberto: number };
 
 /**
  * Faturas, devido e limite de um cartão a partir de todos os lançamentos dele (inclusive parcelas futuras).
  * Compras (negativas) entram na fatura pela data; pagamentos e estornos (positivos) quitam as faturas mais antigas primeiro.
- * Cartão manual: disponível = limite - faturas abertas - parcelas futuras. Cartão do banco: usa o disponível informado.
+ * Cartão manual: disponível = limite - faturas abertas - parcelas futuras.
+ * Cartão do banco (tem disponível informado): fatura aberta, vencimento e dívida vêm do banco. O histórico não serve,
+ * porque o Open Finance não manda os pagamentos de fatura do lado do cartão: tudo pareceria em aberto.
  */
 export function resumoDoCartao(c: CartaoBase, lancamentos: { data: string; valorCentavos: number }[]) {
+  if (c.limiteDisponivelCentavos !== null) {
+    const aberto = c.faturaAbertaCentavos ?? 0;
+    const faturas: Fatura[] = aberto > 0 && c.faturaVencimento ? [{ fechamento: null, vencimento: c.faturaVencimento, total: aberto, aberto }] : [];
+    const devido = c.limiteTotalCentavos - c.limiteDisponivelCentavos;
+    const usoPct = c.limiteTotalCentavos > 0 ? (devido / c.limiteTotalCentavos) * 100 : 0;
+    return { faturas, devido, disponivel: c.limiteDisponivelCentavos, usoPct };
+  }
   const porVencimento = new Map<string, { fechamento: string; vencimento: string; total: number }>();
   let creditos = 0;
   for (const l of lancamentos) {
@@ -41,7 +54,7 @@ export function resumoDoCartao(c: CartaoBase, lancamentos: { data: string; valor
     atual.total -= l.valorCentavos;
     porVencimento.set(f.vencimento, atual);
   }
-  const faturas = [...porVencimento.values()]
+  const faturas: Fatura[] = [...porVencimento.values()]
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento))
     .map((f) => {
       const pago = Math.min(creditos, f.total);
@@ -49,7 +62,7 @@ export function resumoDoCartao(c: CartaoBase, lancamentos: { data: string; valor
       return { ...f, aberto: f.total - pago };
     });
   const devido = faturas.reduce((s, f) => s + f.aberto, 0) - creditos;
-  const disponivel = c.limiteDisponivelCentavos ?? c.limiteTotalCentavos - devido;
+  const disponivel = c.limiteTotalCentavos - devido;
   const usoPct = c.limiteTotalCentavos > 0 ? ((c.limiteTotalCentavos - disponivel) / c.limiteTotalCentavos) * 100 : 0;
   return { faturas, devido, disponivel, usoPct };
 }

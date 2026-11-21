@@ -69,7 +69,7 @@ export default async function Credito() {
               <MedidorCredito usoPct={p.usoPct} faixa={p.faixa} faixas={r.faixas} rotulo={k.nome} />
               <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 {proxima
-                  ? `Fatura de ${formatarReais(proxima.aberto)} vence ${formatarData(proxima.vencimento)} (fecha ${formatarData(proxima.fechamento)})`
+                  ? `Fatura de ${formatarReais(proxima.aberto)} vence ${formatarData(proxima.vencimento)} ${proxima.fechamento ? ` (fecha ${formatarData(proxima.fechamento)})` : ""}`
                   : "Sem fatura aberta"}
               </p>
             </div>

@@ -248,7 +248,9 @@ export default async function Contas() {
                   </div>
                   {aPagar && (
                     <div>
-                      <dt className="text-zinc-600 dark:text-zinc-400">Fatura que fecha {formatarData(aPagar.fechamento)}</dt>
+                      <dt className="text-zinc-600 dark:text-zinc-400">
+                        {aPagar.fechamento ? `Fatura que fecha ${formatarData(aPagar.fechamento)}` : "Fatura aberta (informada pelo banco)"}
+                      </dt>
                       <dd className="tabular font-semibold">{formatarReais(aPagar.aberto)}</dd>
                     </div>
                   )}
@@ -258,7 +260,7 @@ export default async function Contas() {
                   </div>
                 </dl>
 
-                {aPagar && contas.length > 0 && (
+                {aPagar && contas.length > 0 && c.limiteDisponivelCentavos === null && (
                   <Form action={pagarFaturaAcao} className="mt-3 flex flex-wrap items-end gap-2">
                     <input type="hidden" name="cartaoId" value={c.id} />
                     <label className={`${rotulo} w-32`}>

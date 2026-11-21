@@ -100,12 +100,20 @@ export async function sincronizarConexao(db: Db, uid: string, conexaoId: string,
               // Open Finance não informa o fechamento: começa em 1 e o usuário ajusta em Contas
               diaFechamento: cb.diaFechamento ?? 1,
               diaVencimento: cb.diaVencimento ?? 10,
+              faturaAbertaCentavos: cb.faturaAbertaCentavos,
+              faturaVencimento: cb.faturaVencimento,
               conexaoId,
               idExterno: cb.idExterno,
             })
             .onConflictDoUpdate({
               target: [cartao.conexaoId, cartao.idExterno],
-              set: { limiteTotalCentavos: cb.limiteTotalCentavos, limiteDisponivelCentavos: cb.limiteDisponivelCentavos, ...dias },
+              set: {
+                limiteTotalCentavos: cb.limiteTotalCentavos,
+                limiteDisponivelCentavos: cb.limiteDisponivelCentavos,
+                faturaAbertaCentavos: cb.faturaAbertaCentavos,
+                faturaVencimento: cb.faturaVencimento,
+                ...dias,
+              },
             })
             .returning({ id: cartao.id });
           alvo = { contaId: null, cartaoId: c!.id };
@@ -190,7 +198,7 @@ export async function desconectar(db: Db, uid: string, conexaoId: string, proved
         // conta manual: saldo atual = abertura + lançamentos; a abertura que mantém o saldo de hoje é saldo - soma
         await tx.update(conta).set({ origem: "manual", conexaoId: null, idExterno: null, saldoCentavos: c.saldoCentavos - (s?.total ?? 0) }).where(eq(conta.id, c.id));
       }
-      await tx.update(cartao).set({ conexaoId: null, idExterno: null, limiteDisponivelCentavos: null }).where(and(eq(cartao.usuarioId, uid), eq(cartao.conexaoId, conexaoId)));
+      await tx.update(cartao).set({ conexaoId: null, idExterno: null, limiteDisponivelCentavos: null, faturaAbertaCentavos: null, faturaVencimento: null }).where(and(eq(cartao.usuarioId, uid), eq(cartao.conexaoId, conexaoId)));
       await tx.update(transacao).set({ conexaoId: null, idExterno: null, origem: "manual" }).where(and(eq(transacao.usuarioId, uid), eq(transacao.conexaoId, conexaoId)));
     } else {
       await tx.delete(transacao).where(and(eq(transacao.usuarioId, uid), eq(transacao.conexaoId, conexaoId)));

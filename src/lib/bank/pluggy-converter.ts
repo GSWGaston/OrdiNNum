@@ -74,6 +74,9 @@ export function converterContaPluggy(a: ContaPluggy): ContaBanco {
       limiteDisponivelCentavos: c.availableCreditLimit == null ? null : centavos(c.availableCreditLimit),
       diaFechamento: diaDe(c.balanceCloseDate), // Open Finance não informa: fica o que o usuário definir
       diaVencimento: diaDe(c.balanceDueDate),
+      // para cartão, `balance` é o que falta pagar da fatura atual (negativo = pagou a mais)
+      faturaAbertaCentavos: Math.max(0, centavos(a.balance)),
+      faturaVencimento: c.balanceDueDate ? c.balanceDueDate.slice(0, 10) : null,
     };
   }
   return { idExterno: a.id, nome, tipo: "conta", subtipo: a.subtype === "SAVINGS_ACCOUNT" ? "poupanca" : "corrente", saldoCentavos: centavos(a.balance) };

@@ -191,6 +191,9 @@ export const cartao = pgTable(
     limiteDisponivelCentavos: centavos(),
     diaFechamento: integer().notNull(),
     diaVencimento: integer().notNull(),
+    // cartão do banco: fatura aberta e vencimento informados pelo banco (Open Finance não manda os pagamentos no cartão)
+    faturaAbertaCentavos: centavos(),
+    faturaVencimento: date(),
     conexaoId: uuid().references(() => conexaoBanco.id, { onDelete: "set null" }),
     idExterno: text(),
   },

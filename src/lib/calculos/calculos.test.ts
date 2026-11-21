@@ -126,8 +126,18 @@ describe("cartão", () => {
     expect(r.disponivel).toBe(485000);
     expect(r.usoPct).toBe(3);
   });
-  it("cartão do banco usa o disponível informado; pagamento a mais vira crédito", () => {
-    expect(resumoDoCartao({ ...c, limiteDisponivelCentavos: 400000 }, [{ data: "2026-11-01", valorCentavos: -1 }]).disponivel).toBe(400000);
+  it("cartão do banco: fatura, vencimento e dívida vêm do banco, não do histórico", () => {
+    // caso real (Inter via Open Finance): compras de 12 meses chegam, os pagamentos da fatura não
+    const compras = ["2026-01-05", "2026-02-05", "2026-03-05"].map((data) => ({ data, valorCentavos: -50000 }));
+    const banco = { ...c, limiteTotalCentavos: 298000, limiteDisponivelCentavos: 262990, faturaAbertaCentavos: 35010, faturaVencimento: "2026-12-07" };
+    expect(resumoDoCartao(banco, compras)).toMatchObject({
+      faturas: [{ fechamento: null, vencimento: "2026-12-07", total: 35010, aberto: 35010 }],
+      devido: 35010,
+      disponivel: 262990,
+    });
+    expect(resumoDoCartao({ ...banco, faturaAbertaCentavos: 0 }, compras).faturas).toEqual([]);
+  });
+  it("cartão manual: pagamento a mais vira crédito", () => {
     const r = resumoDoCartao(c, [{ data: "2026-11-01", valorCentavos: -1000 }, { data: "2026-11-05", valorCentavos: 1500 }]);
     expect(r.devido).toBe(-500);
     expect(r.disponivel).toBe(500500);

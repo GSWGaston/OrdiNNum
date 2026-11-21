@@ -71,6 +71,13 @@
       "when": 1795287992546,
       "tag": "0009_open_finance",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795292364082,
+      "tag": "0010_fatura_banco",
+      "breakpoints": true
     }
   ]
 }
