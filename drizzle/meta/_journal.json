@@ -57,6 +57,13 @@
       "when": 1795286048660,
       "tag": "0007_faixas_credito",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795286507641,
+      "tag": "0008_objetivos",
+      "breakpoints": true
     }
   ]
 }

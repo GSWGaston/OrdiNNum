@@ -23,6 +23,7 @@ Comparação da Fase 1 entregue com a especificação (PDF) e o prompt. Cada ite
 | B3 | `transacao.observacao` (novo campo) | O módulo Lançamentos da spec cita "observação". |
 | B4 | `usuario.senha_hash` (novo campo) | Login por e-mail e senha. |
 | B6 | `transacao.transferencia_id` (novo campo) e `conta_id` agora opcional (conta **ou** cartão, garantido por CHECK) | Pagamento de fatura é um par de lançamentos (sai da conta, entra no cartão) que não conta como receita/despesa. É o mesmo mecanismo que servirá para C1. |
+| B9 | `aporte_objetivo.usuario_id` (não está na spec) e `objetivo.criado_em` | Convenção do projeto (todo registro filtra por usuário) e base para o "esperado até hoje". |
 | B8 | `recorrencia.automatica` e tabela `tentativa_login` (sem `usuario_id`: guarda tentativas por e-mail, não dados do usuário) | Itens A5 e C2. |
 | B7 | `cartao.limite_disponivel_centavos` fica vazio em cartão manual | O disponível é calculado (limite − faturas abertas − parcelas futuras); o banco preenche na fase 3. |
 | B5 | Tabelas ainda não criadas: RegraCategoria, MetaMensal, OrcamentoCategoria, Objetivo, AporteObjetivo, ConexaoBanco; colunas `transacao.id_externo` e unicidade (conexão, id_externo) | Entram nas fases que as usam (2 e 3). |
@@ -51,7 +52,7 @@ Comparação da Fase 1 entregue com a especificação (PDF) e o prompt. Cada ite
 | F1 | Meta do mês + gasto diário sugerido | **Feito.** Tela "Meta", destaque no painel, "de onde vem o número". |
 | F2 | Orçamento por categoria (alertas 80%/100%) | **Feito.** Limites na tela "Metas", aviso no painel aos 80% e 100%. Nova categoria **Carro** (Combustível, Manutenção, Seguro, IPVA e licenciamento, Estacionamento e pedágio); em contas antigas o Combustível saiu de Transporte para Carro. |
 | F3 | Crédito consolidado (medidor com faixas, tela Crédito, parcelas futuras por mês) | **Feito.** Medidor no painel, tela Crédito (link no painel e em Contas), faixas ajustáveis por usuário. |
-| F4 | Objetivos (aporte mensal, data estimada, status) | A fazer |
+| F4 | Objetivos (aporte mensal, data estimada, status) | **Feito.** Tela Objetivos (link em Metas e no painel), guardar/retirar, histórico, arquivar. O dinheiro separado sai do saldo livre do gasto diário. **Fase 2 concluída.** |
 
 ## G. Ideias anotadas para depois
 

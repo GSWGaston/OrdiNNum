@@ -22,6 +22,8 @@ export type EntradaGastoDiario = {
   previstos: { valorCentavos: number }[];
   /** quanto se deve nos cartões por compras feitas até o fim do mês (compra conta no dia da compra) */
   dividaCartoes: number;
+  /** dinheiro separado em objetivos ativos: não pode ser gasto (spec: não entra no saldo livre) */
+  reservadoObjetivos?: number;
 };
 
 export const diasRestantes = (hoje: string, fim: string) =>
@@ -35,7 +37,7 @@ export const ehVariavel = (l: LancamentoDia) =>
  * Disp = ReceitasRestantes + SaldoAtual - FixasAPagar - Alvo; GastoDiario = Disp / DiasRestantes (inclui hoje).
  *
  * - Saldo atual: contas exceto "investimento" (dinheiro de gastar).
- * - Alvo: "terminar com Y" -> Y. "Economizar X" -> saldo no início do mês + X, descontando o que já foi
+ * - Alvo: "terminar com Y" -> Y + o reservado em objetivos (a reserva continua lá no fim do mês). "Economizar X" -> saldo no início do mês + X, descontando o que já foi
  *   transferido para conta de investimento no mês (isso já é economia). Na spec as duas fórmulas ficariam
  *   idênticas se "economizar X" usasse o saldo atual; ver README.
  * - Fixas a pagar: recorrências de despesa pendentes, lançamentos futuros de saída no mês e dívida dos cartões.
@@ -67,7 +69,10 @@ export function calcularGastoDiario(e: EntradaGastoDiario) {
 
   const receitasRestantes = somaPos(e.previstos) + somaPos(futuros);
   const fixasAPagar = somaNeg(e.previstos) + somaNeg(futuros) + Math.max(0, e.dividaCartoes);
-  const alvo = e.meta.modo === "economizar" ? saldoInicioMes + e.meta.valorCentavos - guardadoNoMes : e.meta.valorCentavos;
+  // "economizar" já exige que o saldo cresça, então a reserva dos objetivos fica intacta; não descontar de novo
+  const reservado = Math.max(0, e.reservadoObjetivos ?? 0);
+  const alvo =
+    e.meta.modo === "economizar" ? saldoInicioMes + e.meta.valorCentavos - guardadoNoMes : e.meta.valorCentavos + reservado;
   const disponivel = receitasRestantes + saldoAtual - fixasAPagar - alvo;
 
   const variaveis = ateHoje.filter((l) => ehVariavel(l) && (l.cartaoId || naLiquida(l)));
@@ -75,7 +80,7 @@ export function calcularGastoDiario(e: EntradaGastoDiario) {
   const gastoMes = 0 - variaveis.reduce((s, l) => s + l.valorCentavos, 0);
   const dias = diasRestantes(e.hoje, e.fimDoMes);
 
-  const base = { receitasRestantes, saldoAtual, fixasAPagar, alvo, disponivel, dias, gastoHoje, gastoMes, saldoInicioMes, guardadoNoMes };
+  const base = { receitasRestantes, saldoAtual, fixasAPagar, alvo, disponivel, dias, gastoHoje, gastoMes, saldoInicioMes, guardadoNoMes, reservado };
   if (disponivel < 0) return { ...base, alcancavel: false as const, falta: -disponivel };
 
   const limiteHoje = Math.floor((disponivel + gastoHoje) / dias);

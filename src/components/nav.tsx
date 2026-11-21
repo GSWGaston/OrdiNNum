@@ -22,7 +22,8 @@ export function Nav() {
     >
       <ul className="mx-auto flex max-w-3xl justify-around md:justify-start md:gap-1">
         {ITENS.map((i) => {
-          const ativo = i.href === "/" ? atual === "/" : atual.startsWith(i.href);
+          // Metas cobre meta do mês, orçamento e objetivos
+          const ativo = i.href === "/" ? atual === "/" : atual.startsWith(i.href) || (i.href === "/orcamento" && atual.startsWith("/objetivos"));
           return (
             <li key={i.href}>
               <Link

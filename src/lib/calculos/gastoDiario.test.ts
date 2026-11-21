@@ -104,6 +104,14 @@ describe("gasto diário", () => {
     expect(r).toMatchObject({ alvo: 300000, alcancavel: false, falta: 50000 });
   });
 
+  it("dinheiro de objetivo não entra no saldo livre (terminar com Y)", () => {
+    // saldo 3.000, meta terminar com 500, 1.000 separados em objetivos -> livre 1.500
+    expect(calcularGastoDiario({ ...base, reservadoObjetivos: 100000 })).toMatchObject({ alvo: 150000, disponivel: 150000, limiteHoje: 15000 });
+    // economizar: a reserva não é descontada de novo
+    const eco = { ...base, meta: { modo: "economizar" as const, valorCentavos: 50000 } };
+    expect(calcularGastoDiario({ ...eco, reservadoObjetivos: 100000 }).disponivel).toBe(calcularGastoDiario(eco).disponivel);
+  });
+
   it("meta inalcançável mostra quanto falta, nunca gasto negativo", () => {
     const r = calcularGastoDiario({ ...base, meta: { modo: "saldo_final", valorCentavos: 400000 } });
     expect(r).toMatchObject({ alcancavel: false, falta: 100000 });

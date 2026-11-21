@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { salvarMeta, salvarOrcamento } from "@/app/acoes";
-import { botaoPerigo, botaoSecundario, campo, cartao, rotulo, titulo } from "@/components/estilos";
+import { botaoPerigo, botaoSecundario, campo, cartao, link, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
 import { descreverMeta, GastoDiario } from "@/components/gasto-diario";
 import { BarraOrcamento } from "@/components/orcamentos";
@@ -32,7 +33,12 @@ export default async function Orcamento() {
 
   return (
     <>
-      <h1 className={titulo}>Meta de {nomeDoMes(mes).toLowerCase()}</h1>
+      <div className="flex items-baseline justify-between gap-2">
+        <h1 className={titulo}>Meta de {nomeDoMes(mes).toLowerCase()}</h1>
+        <Link href="/objetivos" className={`${link} text-sm`}>
+          Objetivos ›
+        </Link>
+      </div>
       <GastoDiario dados={dados} />
 
       <section className={cartao} aria-labelledby="def-meta">
@@ -145,6 +151,11 @@ export default async function Orcamento() {
             <dd className="text-right">{formatarReais(dados.fixasAPagar)}</dd>
             <dt>
               − Meta ({descreverMeta(dados.meta)})
+              {dados.meta.modo === "saldo_final" && dados.reservado > 0 && (
+                <span className="block text-xs text-zinc-600 dark:text-zinc-400">
+                  + {formatarReais(dados.reservado)} reservados em objetivos
+                </span>
+              )}
               {dados.meta.modo === "economizar" && (
                 <span className="block text-xs text-zinc-600 dark:text-zinc-400">
                   saldo no início do mês {formatarReais(dados.saldoInicioMes)} + meta

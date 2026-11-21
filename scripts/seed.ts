@@ -9,6 +9,7 @@ import { criarCartao, listarCartoes, pagarFatura } from "../src/lib/dados/cartoe
 import { listarCategorias } from "../src/lib/dados/categorias";
 import { definirMeta } from "../src/lib/dados/metas";
 import { definirOrcamento } from "../src/lib/dados/orcamentos";
+import { aportar, criarObjetivo, listarObjetivos } from "../src/lib/dados/objetivos";
 import { criarConta, listarContas } from "../src/lib/dados/contas";
 import { criarRecorrencia } from "../src/lib/dados/recorrencias";
 import { criarTransacao } from "../src/lib/dados/transacoes";
@@ -76,6 +77,15 @@ async function main() {
   await definirMeta(db, uid, mes, { modo: "economizar", valorCentavos: 50000 });
   await definirOrcamento(db, uid, mes, cat.get("Alimentação")!, 70000);
   await definirOrcamento(db, uid, mes, cat.get("Carro")!, 20000);
+
+  const hojeISO = hoje();
+  await criarObjetivo(db, uid, { nome: "[exemplo] Viagem", valorAlvoCentavos: 600000, prazo: d(somarMesesAoMes(mes, 8), 21) }, d(somarMesesAoMes(mes, -4), 21));
+  await criarObjetivo(db, uid, { nome: "[exemplo] Reserva de emergência", valorAlvoCentavos: 1500000, prazo: null }, d(somarMesesAoMes(mes, -6), 1));
+  const objs = await listarObjetivos(db, uid, hojeISO);
+  const viagem = objs.find((o) => o.nome.includes("Viagem"))!;
+  const reserva = objs.find((o) => o.nome.includes("Reserva"))!;
+  for (const m of [-3, -2, -1]) await aportar(db, uid, viagem.id, { data: d(somarMesesAoMes(mes, m), 6), valorCentavos: 50000 });
+  for (const m of [-3, -2, -1]) await aportar(db, uid, reserva.id, { data: d(somarMesesAoMes(mes, m), 6), valorCentavos: 100000 });
 
   console.log(`Seed pronto: ${EMAIL} / ${SENHA} (dados fictícios)`);
 }

@@ -31,6 +31,8 @@ import {
 import { buscarPorEmail, criarUsuario, excluirUsuario } from "@/lib/dados/usuarios";
 import { definirFaixas } from "@/lib/dados/credito";
 import { definirMeta } from "@/lib/dados/metas";
+import { aportar, arquivarObjetivo, atualizarObjetivo, criarObjetivo, excluirAporte, excluirObjetivo } from "@/lib/dados/objetivos";
+import { hoje } from "@/lib/calculos/datas";
 import { definirOrcamento } from "@/lib/dados/orcamentos";
 import { JANELA_MIN } from "@/lib/dados/tentativas";
 import type { Estado } from "@/lib/estado";
@@ -185,6 +187,49 @@ export async function salvarFaixas(_: Estado, fd: FormData) {
   const p = ler(z.object({ amarelaPct: pct, vermelhaPct: pct }), fd);
   if (!p.success) return { erro: msg(p.error) };
   return rodar((uid) => definirFaixas(db, uid, p.data), "Faixas salvas.");
+}
+
+// ---------- objetivos ----------
+
+export async function salvarObjetivo(_: Estado, fd: FormData) {
+  const p = ler(
+    z.object({
+      id: idOpcional,
+      nome: texto(80).min(1, "Dê um nome ao objetivo."),
+      alvo: valor,
+      prazo: z.preprocess(vazioParaNulo, dia.nullable()),
+    }),
+    fd,
+  );
+  if (!p.success) return { erro: msg(p.error) };
+  const { id: oid, alvo, ...d } = p.data;
+  const dados = { ...d, valorAlvoCentavos: alvo };
+  return rodar((uid) => (oid ? atualizarObjetivo(db, uid, oid, dados) : criarObjetivo(db, uid, dados, hoje())), oid ? "Objetivo salvo." : "Objetivo criado.");
+}
+
+export async function aportarAcao(_: Estado, fd: FormData) {
+  const p = ler(z.object({ objetivoId: id, tipo: z.enum(["guardar", "retirar"]), valor, data: dia }), fd);
+  if (!p.success) return { erro: msg(p.error) };
+  const { objetivoId, tipo: t, valor: v, data } = p.data;
+  return rodar((uid) => aportar(db, uid, objetivoId, { data, valorCentavos: t === "retirar" ? -v : v }), t === "retirar" ? "Retirada registrada." : "Aporte registrado.");
+}
+
+export async function removerAporte(_: Estado, fd: FormData) {
+  const p = id.safeParse(fd.get("id"));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => excluirAporte(db, uid, p.data), "Aporte excluído.");
+}
+
+export async function arquivarObjetivoAcao(_: Estado, fd: FormData) {
+  const p = z.object({ id, arquivar: z.enum(["sim", "nao"]) }).safeParse(Object.fromEntries(fd));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => arquivarObjetivo(db, uid, p.data.id, p.data.arquivar === "sim"), p.data.arquivar === "sim" ? "Objetivo arquivado." : "Objetivo reativado.");
+}
+
+export async function removerObjetivo(_: Estado, fd: FormData) {
+  const p = id.safeParse(fd.get("id"));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => excluirObjetivo(db, uid, p.data), "Objetivo excluído.");
 }
 
 // ---------- contas ----------

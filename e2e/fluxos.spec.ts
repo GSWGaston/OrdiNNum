@@ -126,3 +126,17 @@ test("meta do mês: painel mostra o gasto diário e ele muda a cada lançamento"
   await expect(page).toHaveURL(/\/$/);
   await expect.poll(valor).toBeCloseTo(antes - 10, 2);
 });
+
+test("objetivo: cria com prazo, guarda dinheiro e vê o progresso", async ({ page }) => {
+  await cadastrar(page);
+  await criarConta(page, "Conta Obj", "1.000,00");
+  await page.goto("/objetivos");
+  const novo = page.locator("section", { has: page.getByRole("heading", { name: "Novo objetivo" }) });
+  await novo.getByLabel("Nome").fill("Bicicleta");
+  await novo.getByLabel("Quanto quer juntar (R$)").fill("1.200");
+  await novo.getByRole("button", { name: "Criar objetivo" }).click();
+  await expect(page.getByText("Bicicleta", { exact: true })).toBeVisible();
+  await page.getByLabel("Valor", { exact: true }).fill("300");
+  await page.getByRole("button", { name: "+ Guardar" }).click();
+  await expect(page.getByText(/R\$\s300,00 de R\$\s1\.200,00 \(25%\)/)).toBeVisible();
+});

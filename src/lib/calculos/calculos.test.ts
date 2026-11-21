@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { hoje, limitesDoMes, ocorrenciasAte, proximaData, somarMeses, somarMesesAoMes } from "./datas";
 import { faturaDaCompra, resumoDoCartao } from "./cartao";
 import { consolidarCredito, FAIXAS_PADRAO, faixaDeUso, gastoNoCreditoNoMes, parcelasFuturasPorMes } from "./credito";
+import { mesesRestantes, resumoObjetivo } from "./objetivos";
 import { progressoOrcamentos } from "./orcamento";
 import { gerarParcelas } from "./parcelas";
 import { despesasPorCategoria, previstosAte, resumoDoMes, saldoDaConta } from "./resumo";
@@ -202,6 +203,43 @@ describe("crédito consolidado", () => {
       { mes: "2026-12", total: 35000 },
       { mes: "2027-01", total: 30000 },
     ]);
+  });
+});
+
+describe("objetivos", () => {
+  it("meses restantes arredondam para cima e nunca são menos que 1", () => {
+    expect(mesesRestantes("2026-11-21", "2027-07-21")).toBe(8);
+    expect(mesesRestantes("2026-11-21", "2027-07-31")).toBe(9);
+    expect(mesesRestantes("2026-11-21", "2026-11-30")).toBe(1);
+    expect(mesesRestantes("2026-11-21", "2026-10-01")).toBe(1); // prazo vencido
+  });
+  const viagem = { valorAlvoCentavos: 600000, prazo: "2027-07-21", criadoEm: "2026-07-21" }; // 12 meses
+  it("com prazo: aporte mensal e status pelo esperado até hoje", () => {
+    // hoje = 4 meses depois de criado: esperado ~1/3 do alvo (2.000)
+    const noRitmo = resumoObjetivo(viagem, [{ data: "2026-08-01", valorCentavos: 200000 }], "2026-11-21");
+    expect(noRitmo).toMatchObject({ guardado: 200000, falta: 400000, pct: 33, meses: 8, aporteMensal: 50000, andamento: "no_ritmo" });
+    expect(resumoObjetivo(viagem, [{ data: "2026-08-01", valorCentavos: 100000 }], "2026-11-21").andamento).toBe("atrasado");
+    expect(resumoObjetivo(viagem, [{ data: "2026-08-01", valorCentavos: 300000 }], "2026-11-21").andamento).toBe("adiantado");
+    // retirada (aporte negativo) reduz o guardado
+    expect(resumoObjetivo(viagem, [{ data: "2026-08-01", valorCentavos: 300000 }, { data: "2026-09-01", valorCentavos: -100000 }], "2026-11-21").guardado).toBe(200000);
+  });
+  it("concluído quando chega no alvo", () => {
+    expect(resumoObjetivo(viagem, [{ data: "2026-08-01", valorCentavos: 700000 }], "2026-11-21")).toMatchObject({ andamento: "concluido", falta: 0, pct: 100 });
+  });
+  it("sem prazo: data estimada pela média dos últimos 3 meses", () => {
+    const reserva = { valorAlvoCentavos: 1000000, prazo: null, criadoEm: "2026-01-01" };
+    const aportes = [
+      { data: "2026-05-01", valorCentavos: 300000 }, // antigo: fora da média
+      { data: "2026-08-06", valorCentavos: 100000 }, // agosto, setembro, outubro = 3 meses completos
+      { data: "2026-09-06", valorCentavos: 100000 },
+      { data: "2026-10-06", valorCentavos: 100000 },
+      { data: "2026-11-10", valorCentavos: 100000 }, // mês atual (incompleto): fora da média
+    ];
+    // guardado 7.000, falta 3.000; média 1.000/mês -> 3 meses
+    expect(resumoObjetivo(reserva, aportes, "2026-11-21")).toMatchObject({ andamento: "sem_prazo", mediaMensal: 100000, dataEstimada: "2027-02-21" });
+    expect(resumoObjetivo(reserva, [{ data: "2026-05-01", valorCentavos: 1 }], "2026-11-21").dataEstimada).toBeNull();
+    // objetivo novo, só com aporte deste mês: usa o mês atual como média
+    expect(resumoObjetivo(reserva, [{ data: "2026-11-10", valorCentavos: 250000 }], "2026-11-21")).toMatchObject({ mediaMensal: 250000, dataEstimada: "2027-02-21" });
   });
 });
 

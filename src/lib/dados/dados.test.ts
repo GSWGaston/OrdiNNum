@@ -29,6 +29,7 @@ import {
 import { definirMeta, gastoDiarioDoUsuario, metaVigente } from "./metas";
 import { definirOrcamento, orcamentosVigentes } from "./orcamentos";
 import { definirFaixas, resumoCredito } from "./credito";
+import { aportar, arquivarObjetivo, atualizarObjetivo, criarObjetivo, excluirAporte, excluirObjetivo, listarObjetivos, reservadoEmObjetivos } from "./objetivos";
 import { limparFalhas, loginBloqueado, MAX_FALHAS, registrarFalha } from "./tentativas";
 import { criarUsuario, excluirUsuario, exportarDados } from "./usuarios";
 import { resumoDoMes } from "@/lib/calculos/resumo";
@@ -146,7 +147,7 @@ describe("isolamento entre usuários", () => {
   it("excluir a conta do usuário apaga todos os dados dele e só dele", async () => {
     await excluirUsuario(db, b.uid);
     const e = await exportarDados(db, b.uid);
-    expect(e).toEqual({ usuario: undefined, contas: [], cartoes: [], categorias: [], recorrencias: [], metas: [], orcamentos: [], transacoes: [] });
+    expect(e).toEqual({ usuario: undefined, contas: [], cartoes: [], categorias: [], recorrencias: [], metas: [], orcamentos: [], objetivos: [], aportes: [], transacoes: [] });
     expect(await listarContas(db, a.uid, "2026-12-31")).toHaveLength(1);
   });
 });
@@ -349,3 +350,39 @@ describe("crédito consolidado", () => {
 async function novoUsuarioSemCartao(email: string) {
   return criarUsuario(db, { nome: email, email, senhaHash: "x" });
 }
+
+describe("objetivos", () => {
+  it("aportes, reserva fora do gasto diário, arquivar e isolamento", async () => {
+    const u = await novoUsuario("obj@exemplo.test"); // conta R$ 1.000
+    const outro = await novoUsuario("obj-outro@exemplo.test");
+    await criarObjetivo(db, u.uid, { nome: "Viagem", valorAlvoCentavos: 600000, prazo: "2027-07-21" }, "2026-07-21");
+    await criarObjetivo(db, u.uid, { nome: "Reserva", valorAlvoCentavos: 1000000, prazo: null }, "2026-07-21");
+    const criados = await listarObjetivos(db, u.uid, "2026-11-21");
+    expect(criados.map((o) => o.nome)).toEqual(["Viagem", "Reserva"]); // com prazo primeiro; sem prazo por último
+    const [viagem, reserva] = criados;
+
+    await aportar(db, u.uid, viagem!.id, { data: "2026-08-01", valorCentavos: 200000 });
+    await aportar(db, u.uid, viagem!.id, { data: "2026-09-01", valorCentavos: -20000 });
+    await aportar(db, u.uid, reserva!.id, { data: "2026-11-10", valorCentavos: 30000 });
+    const lista = await listarObjetivos(db, u.uid, "2026-11-21");
+    expect(lista.find((o) => o.nome === "Viagem")).toMatchObject({ guardado: 180000, aporteMensal: 52500, andamento: "no_ritmo" });
+    expect(await reservadoEmObjetivos(db, u.uid)).toBe(210000);
+
+    // gasto diário (terminar com R$ 0): saldo 1.000 - reserva 2.100 = não alcançável, falta 1.100
+    await definirMeta(db, u.uid, "2026-11", { modo: "saldo_final", valorCentavos: 0 });
+    expect(await gastoDiarioDoUsuario(db, u.uid, "2026-11-21")).toMatchObject({ alcancavel: false, falta: 110000 });
+    await arquivarObjetivo(db, u.uid, viagem!.id, true);
+    expect(await reservadoEmObjetivos(db, u.uid)).toBe(30000);
+
+    // outro usuário não vê, não aporta, não edita nem apaga
+    expect(await listarObjetivos(db, outro.uid, "2026-11-21")).toEqual([]);
+    await expect(aportar(db, outro.uid, viagem!.id, { data: "2026-11-21", valorCentavos: 1 })).rejects.toThrow(ErroDados);
+    const antes = await listarObjetivos(db, u.uid, "2026-11-21");
+    await atualizarObjetivo(db, outro.uid, viagem!.id, { nome: "hack", valorAlvoCentavos: 1, prazo: null });
+    await arquivarObjetivo(db, outro.uid, viagem!.id, false);
+    await excluirAporte(db, outro.uid, antes.find((o) => o.nome === "Viagem")!.aportes[0]!.id);
+    await excluirObjetivo(db, outro.uid, viagem!.id);
+    expect(await listarObjetivos(db, u.uid, "2026-11-21")).toEqual(antes);
+    expect(await reservadoEmObjetivos(db, outro.uid)).toBe(0);
+  });
+});

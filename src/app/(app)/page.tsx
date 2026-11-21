@@ -2,10 +2,12 @@ import Link from "next/link";
 import { cartao, link, titulo } from "@/components/estilos";
 import { GastoDiario } from "@/components/gasto-diario";
 import { MedidorCredito } from "@/components/credito";
+import { BarraObjetivo } from "@/components/objetivos";
 import { AlertasOrcamento } from "@/components/orcamentos";
 import { progressoOrcamentos } from "@/lib/calculos/orcamento";
 import { orcamentosVigentes } from "@/lib/dados/orcamentos";
 import { resumoCredito } from "@/lib/dados/credito";
+import { listarObjetivos } from "@/lib/dados/objetivos";
 import { Valor, Vazio } from "@/components/ui";
 import { db } from "@/db";
 import { hoje, limitesDoMes, mesValido, nomeDoMes, somarDias, somarMesesAoMes } from "@/lib/calculos/datas";
@@ -28,7 +30,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   const { fim } = limitesDoMes(mes);
 
   const ehMesAtual = mes === mesAtual;
-  const [contas, cartoes, lancamentos, recorrencias, categorias, gastoDoDia, orcamentos, credito] = await Promise.all([
+  const [contas, cartoes, lancamentos, recorrencias, categorias, gastoDoDia, orcamentos, credito, objetivos] = await Promise.all([
     listarContas(db, uid, dia),
     listarCartoes(db, uid),
     listarTransacoes(db, uid, { mes }),
@@ -37,7 +39,9 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
     ehMesAtual ? gastoDiarioDoUsuario(db, uid, dia) : null,
     orcamentosVigentes(db, uid, mes),
     resumoCredito(db, uid, mesAtual),
+    listarObjetivos(db, uid, dia),
   ]);
+  const objetivosAtivos = objetivos.filter((o) => o.status === "ativo").slice(0, 3);
 
   if (!contas.length)
     return (
@@ -81,6 +85,19 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
               ver detalhes
             </Link>
           </p>
+        </section>
+      )}
+      {objetivosAtivos.length > 0 && (
+        <section className={`${cartao} flex flex-col gap-3`} aria-labelledby="objs">
+          <h2 id="objs" className="text-sm text-zinc-600 dark:text-zinc-400">
+            Objetivos
+          </h2>
+          {objetivosAtivos.map((o) => (
+            <BarraObjetivo key={o.id} o={o} />
+          ))}
+          <Link href="/objetivos" className={`${link} text-xs`}>
+            Guardar dinheiro ou ver todos
+          </Link>
         </section>
       )}
       <nav aria-label="Mês" className="flex items-center justify-between">

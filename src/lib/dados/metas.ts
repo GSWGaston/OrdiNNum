@@ -5,6 +5,7 @@ import { calcularGastoDiario, type Meta } from "@/lib/calculos/gastoDiario";
 import { limitesDoMes } from "@/lib/calculos/datas";
 import { previstosAte } from "@/lib/calculos/resumo";
 import { listarContas } from "./contas";
+import { reservadoEmObjetivos } from "./objetivos";
 import { listarRecorrencias } from "./recorrencias";
 
 /** Define a meta de um mês (substitui a que existir). */
@@ -41,7 +42,7 @@ export async function gastoDiarioDoUsuario(db: Db, uid: string, hoje: string) {
   const { inicio, fim } = limitesDoMes(mes);
   const meta = await metaVigente(db, uid, mes);
   if (!meta) return null;
-  const [contas, lancamentosMes, recorrencias, dividaCartoes] = await Promise.all([
+  const [contas, lancamentosMes, recorrencias, dividaCartoes, reservadoObjetivos] = await Promise.all([
     listarContas(db, uid, hoje),
     db
       .select()
@@ -49,6 +50,7 @@ export async function gastoDiarioDoUsuario(db: Db, uid: string, hoje: string) {
       .where(and(eq(transacao.usuarioId, uid), gte(transacao.data, inicio), lte(transacao.data, fim))),
     listarRecorrencias(db, uid),
     dividaCartoesAte(db, uid, fim),
+    reservadoEmObjetivos(db, uid),
   ]);
   const resultado = calcularGastoDiario({
     hoje,
@@ -58,6 +60,7 @@ export async function gastoDiarioDoUsuario(db: Db, uid: string, hoje: string) {
     lancamentosMes,
     previstos: previstosAte(recorrencias, fim),
     dividaCartoes,
+    reservadoObjetivos,
   });
   return { meta, ...resultado };
 }

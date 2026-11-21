@@ -113,6 +113,11 @@ As demais do modelo (metas, orçamento, objetivos, conexões, regras) entram nas
   **Interpretação da spec**: lida ao pé da letra, a fórmula de "economizar X" ficaria igual à de "terminar com Y".
   Adotei: economizar X → alvo = saldo no início do mês + X (menos o que já foi transferido para investimento no mês);
   terminar com Y → alvo = Y. A meta vale para os meses seguintes até ser trocada.
+- **Objetivos** (`src/lib/calculos/objetivos.ts`): aporte = reserva de dinheiro que está nas suas contas (não move
+  dinheiro). No gasto diário, modo "terminar com Y" passa a exigir Y + o reservado; no modo "economizar" a reserva já
+  fica protegida porque a meta exige que o saldo cresça. Status com prazo: esperado = alvo proporcional ao tempo
+  desde a criação; folga de 5% do alvo para "no ritmo". Sem prazo: média dos 3 últimos meses completos (ou o mês
+  atual, se não houver histórico).
 - **Transação ganhou `observacao`** (o módulo Lançamentos da especificação cita "observação").
 - **Categorias padrão** criadas no cadastro (Moradia > Aluguel, Luz, Água, Internet etc.).
 - **Fuso fixo America/Sao_Paulo** para "hoje".

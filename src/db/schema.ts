@@ -129,6 +129,37 @@ export const orcamentoCategoria = pgTable(
   (t) => [unique().on(t.usuarioId, t.categoriaId, t.mes)],
 );
 
+export const statusObjetivo = pgEnum("status_objetivo", ["ativo", "arquivado"]);
+
+export const objetivo = pgTable(
+  "objetivo",
+  {
+    id: id(),
+    usuarioId: dono(),
+    nome: text().notNull(),
+    valorAlvoCentavos: centavos().notNull(),
+    prazo: date(), // opcional
+    status: statusObjetivo().notNull().default("ativo"),
+    criadoEm: date().notNull(), // início da contagem do "esperado até hoje"
+  },
+  (t) => [index().on(t.usuarioId)],
+);
+
+// usuario_id aqui também (convenção do projeto: todo registro filtra por usuário)
+export const aporteObjetivo = pgTable(
+  "aporte_objetivo",
+  {
+    id: id(),
+    usuarioId: dono(),
+    objetivoId: uuid()
+      .notNull()
+      .references(() => objetivo.id, { onDelete: "cascade" }),
+    data: date().notNull(),
+    valorCentavos: centavos().notNull(), // negativo = retirada
+  },
+  (t) => [index().on(t.objetivoId)],
+);
+
 export const cartao = pgTable(
   "cartao",
   {
