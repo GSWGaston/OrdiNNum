@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cartao, link, titulo } from "@/components/estilos";
 import { GastoDiario } from "@/components/gasto-diario";
-import { MedidorCredito } from "@/components/credito";
+import { FAIXA } from "@/components/credito";
 import { BarraObjetivo } from "@/components/objetivos";
 import { Alertas } from "@/components/alertas";
 import { gerarAlertas } from "@/lib/calculos/alertas";
@@ -45,6 +45,11 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
     listarConexoes(db, uid),
   ]);
   const objetivosAtivos = objetivos.filter((o) => o.status === "ativo").slice(0, 3);
+  // por cartão, a próxima fatura em aberto (o valor do mês, não o total parcelado)
+  const faturasAPagar = (credito?.cartoes ?? []).flatMap((c) => {
+    const f = c.faturas.find((x) => x.aberto > 0);
+    return f ? [{ cartao: c.nome, vencimento: f.vencimento, aberto: f.aberto }] : [];
+  });
 
   if (!contas.length)
     return (
@@ -86,16 +91,34 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
         })}
       />
       {credito && (
-        <section className={cartao} aria-labelledby="uso-credito">
-          <h2 id="uso-credito" className="mb-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Uso do crédito ({credito.cartoes.length} cartão(ões))
+        <section className={`${cartao} flex flex-col gap-2`} aria-labelledby="faturas">
+          {/* no painel vale o que se paga no mês (a parcela), não o total da compra parcelada que o banco tira do limite */}
+          <h2 id="faturas" className="text-sm text-zinc-600 dark:text-zinc-400">
+            Faturas dos cartões a pagar
           </h2>
-          <MedidorCredito usoPct={credito.consolidado.usoPct} faixa={credito.consolidado.faixa} faixas={credito.faixas} rotulo="Uso do crédito" />
+          <p className="tabular text-2xl font-bold" data-testid="faturas-a-pagar">
+            {formatarReais(faturasAPagar.reduce((s, f) => s + f.aberto, 0))}
+          </p>
+          {faturasAPagar.length === 0 ? (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">Nenhuma fatura em aberto.</p>
+          ) : (
+            <ul className="flex flex-col gap-1 text-sm">
+              {faturasAPagar.map((f) => (
+                <li key={f.cartao} className="flex justify-between gap-2">
+                  <span>
+                    💳 {f.cartao} <span className="text-zinc-600 dark:text-zinc-400">· vence {formatarData(f.vencimento)}</span>
+                    {f.vencimento < dia && <strong className="ml-1 text-red-700 dark:text-red-400">(vencida)</strong>}
+                  </span>
+                  <span className="tabular">{formatarReais(f.aberto)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <p className="text-xs text-zinc-600 dark:text-zinc-400">
-            {formatarReais(credito.consolidado.disponivel)} livres de {formatarReais(credito.consolidado.limiteTotal)} ·{" "}
-            {formatarReais(credito.totalParcelasFuturas)} em parcelas futuras ·{" "}
+            Limite usado: {Math.round(credito.consolidado.usoPct)}% ({FAIXA[credito.consolidado.faixa].texto}), já contando{" "}
+            {formatarReais(credito.totalParcelasFuturas)} de parcelas dos próximos meses ·{" "}
             <Link href="/credito" className={link}>
-              ver detalhes
+              ver limite e parcelas
             </Link>
           </p>
         </section>

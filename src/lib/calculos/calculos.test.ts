@@ -253,6 +253,32 @@ describe("objetivos", () => {
   });
 });
 
+describe("parcelas futuras de cartão do banco", () => {
+  const base = { cartaoId: "mp", grupoParcelas: null, transferenciaId: null, parcelasTotal: 8 };
+  it("projeta as parcelas que faltam a partir da última que chegou (caso Mercado Pago 8x)", () => {
+    const lancs = [
+      { ...base, data: "2026-09-12", valorCentavos: -15664, descricao: "LOJA ELETRO 1/8", parcelaAtual: 1 },
+      { ...base, data: "2026-10-12", valorCentavos: -15664, descricao: "LOJA ELETRO 2/8", parcelaAtual: 2 },
+      { ...base, data: "2026-11-12", valorCentavos: -15664, descricao: "LOJA ELETRO 3/8", parcelaAtual: 3 },
+      { ...base, data: "2026-11-15", valorCentavos: -5000, descricao: "MERCADO", parcelaAtual: null, parcelasTotal: null },
+    ];
+    const r = parcelasFuturasPorMes(lancs, "2026-11");
+    // faltam 4/8 a 8/8: dezembro a abril
+    expect(r.map((p) => p.mes)).toEqual(["2026-12", "2027-01", "2027-02", "2027-03", "2027-04"]);
+    expect(r.every((p) => p.total === 15664)).toBe(true);
+    // compra com o mesmo nome em outro cartão é outra compra
+    expect(parcelasFuturasPorMes([...lancs, { ...lancs[2]!, cartaoId: "nu" }], "2026-11")[0]!.total).toBe(31328);
+  });
+  it("não conta duas vezes a parcela futura que o banco já mandou", () => {
+    const lancs = [
+      { ...base, data: "2026-11-12", valorCentavos: -10000, descricao: "CURSO PARC 03/08", parcelaAtual: 3 },
+      { ...base, data: "2026-12-12", valorCentavos: -10000, descricao: "CURSO PARC 04/08", parcelaAtual: 4 },
+    ];
+    const r = parcelasFuturasPorMes(lancs, "2026-11");
+    expect(r.map((p) => [p.mes, p.total])).toEqual([["2026-12", 10000], ["2027-01", 10000], ["2027-02", 10000], ["2027-03", 10000], ["2027-04", 10000]]);
+  });
+});
+
 describe("formato", () => {
   it("formata reais e datas no padrão brasileiro", () => {
     expect(formatarReais(123456).replace(/\s/g, " ")).toBe("R$ 1.234,56");

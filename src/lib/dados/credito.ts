@@ -31,6 +31,9 @@ export async function resumoCredito(db: Db, uid: string, mes: string) {
         cartaoId: transacao.cartaoId,
         grupoParcelas: transacao.grupoParcelas,
         transferenciaId: transacao.transferenciaId,
+        descricao: transacao.descricao,
+        parcelaAtual: transacao.parcelaAtual,
+        parcelasTotal: transacao.parcelasTotal,
       })
       .from(transacao)
       .where(and(eq(transacao.usuarioId, uid), isNotNull(transacao.cartaoId))),
