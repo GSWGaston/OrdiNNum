@@ -33,7 +33,7 @@ import { aportar, arquivarObjetivo, atualizarObjetivo, criarObjetivo, excluirApo
 import { FakeProvider, dadosExemplo } from "@/lib/bank/fake";
 import { criarConexao, desconectar, itemIdDaConexao, listarConexoes, registrarItem, sincronizarConexao } from "./conexoes";
 import { aplicarRegrasSemCategoria, criarRegra, listarRegras } from "./regras";
-import { desfazerTransferencia, detectarTransferencias, marcarComoTransferencia } from "./transferencias";
+import { desfazerTransferencia, detectarTransferencias, marcarComoTransferencia, vincularReembolso } from "./transferencias";
 import { limparFalhas, loginBloqueado, MAX_FALHAS, registrarFalha } from "./tentativas";
 import { criarUsuario, excluirUsuario, exportarDados } from "./usuarios";
 import { resumoDoMes } from "@/lib/calculos/resumo";
@@ -577,5 +577,32 @@ describe("transferências entre contas próprias", () => {
     await marcarComoTransferencia(db, outro.uid, ts[1]!.id); // não é dele
     ts = await listarTransacoes(db, u.uid, { mes: "2026-11" });
     expect(ts.filter((t) => Math.abs(t.valorCentavos) === 20451 && t.transferenciaId).map((t) => t.id)).toEqual([marcado]);
+  });
+});
+
+describe("reembolso vinculado", () => {
+  it("vincula gasto e reembolso, sai das despesas/receitas, desvincula; recusa casos inválidos e de outro usuário", async () => {
+    const u = await novoUsuario("reembolso@exemplo.test");
+    const outro = await novoUsuario("reembolso-outro@exemplo.test");
+    const base = { contaId: u.conta.id, cartaoId: null, categoriaId: null, observacao: null, parcelas: 1 };
+    await criarTransacao(db, u.uid, { ...base, data: "2026-11-01", valorCentavos: -9900, descricao: "Pagamento Microsoft" });
+    await criarTransacao(db, u.uid, { ...base, data: "2026-11-01", valorCentavos: 9999, descricao: "Pix recebido amigo" });
+    await criarTransacao(db, u.uid, { ...base, data: "2026-11-02", valorCentavos: -100, descricao: "outro gasto" });
+    const [g, pix, og] = ["Pagamento Microsoft", "Pix recebido amigo", "outro gasto"].map(
+      (d) => async () => (await listarTransacoes(db, u.uid, { mes: "2026-11" })).find((t) => t.descricao === d)!,
+    );
+    const gasto = await g!();
+    const reemb = await pix!();
+    await expect(vincularReembolso(db, u.uid, gasto.id, (await og!()).id)).rejects.toThrow(ErroDados); // dois gastos
+    await expect(vincularReembolso(db, outro.uid, gasto.id, reemb.id)).rejects.toThrow(ErroDados); // não é dele
+    await vincularReembolso(db, u.uid, gasto.id, reemb.id);
+    const ts = await listarTransacoes(db, u.uid, { mes: "2026-11" });
+    const par = ts.filter((t) => t.reembolso);
+    expect(par).toHaveLength(2);
+    expect(par[0]!.transferenciaId).toBe(par[1]!.transferenciaId);
+    expect(resumoDoMes(ts, [], 0, "2026-11-30")).toMatchObject({ receitas: 0, despesas: 100 });
+    await expect(vincularReembolso(db, u.uid, gasto.id, reemb.id)).rejects.toThrow(ErroDados); // já vinculado
+    await desfazerTransferencia(db, u.uid, gasto.id);
+    expect((await listarTransacoes(db, u.uid, { mes: "2026-11" })).every((t) => !t.reembolso && !t.transferenciaId)).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import type { Db } from "@/db";
 import { categoria, transacao } from "@/db/schema";
 import { somarDias } from "@/lib/calculos/datas";
 import { JANELA_DIAS, parearTransferencias } from "@/lib/calculos/transferencias";
+import { ErroDados } from "./comum";
 
 /**
  * Junta como transferência os pares saída/entrada de mesmo valor entre contas/cartões do usuário desde `desde`
@@ -65,6 +66,21 @@ export const marcarComoTransferencia = (db: Db, uid: string, id: string) =>
     .set({ transferenciaId: crypto.randomUUID(), categoriaId: null, transferenciaRecusada: false })
     .where(and(eq(transacao.id, id), eq(transacao.usuarioId, uid), isNull(transacao.transferenciaId)));
 
+/** Vincula um gasto ao seu reembolso (sinais opostos, ambos livres): os dois saem de receitas/despesas. */
+export async function vincularReembolso(db: Db, uid: string, idA: string, idB: string) {
+  const ls = await db
+    .select({ id: transacao.id, valorCentavos: transacao.valorCentavos, transferenciaId: transacao.transferenciaId })
+    .from(transacao)
+    .where(and(eq(transacao.usuarioId, uid), inArray(transacao.id, [idA, idB])));
+  if (ls.length !== 2 || idA === idB) throw new ErroDados("Lançamento não encontrado.");
+  if (ls.some((l) => l.transferenciaId)) throw new ErroDados("Um dos lançamentos já está vinculado.");
+  if (Math.sign(ls[0]!.valorCentavos) === Math.sign(ls[1]!.valorCentavos)) throw new ErroDados("Vincule uma saída a uma entrada.");
+  await db
+    .update(transacao)
+    .set({ transferenciaId: crypto.randomUUID(), reembolso: true })
+    .where(and(eq(transacao.usuarioId, uid), inArray(transacao.id, [idA, idB])));
+}
+
 /** "Não é transferência": desfaz o par inteiro e impede a detecção automática de refazer. */
 export async function desfazerTransferencia(db: Db, uid: string, id: string) {
   const [t] = await db
@@ -74,6 +90,6 @@ export async function desfazerTransferencia(db: Db, uid: string, id: string) {
   if (!t?.transferenciaId) return;
   await db
     .update(transacao)
-    .set({ transferenciaId: null, transferenciaRecusada: true })
+    .set({ transferenciaId: null, transferenciaRecusada: true, reembolso: false })
     .where(and(eq(transacao.usuarioId, uid), eq(transacao.transferenciaId, t.transferenciaId)));
 }

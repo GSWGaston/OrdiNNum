@@ -33,7 +33,7 @@ import { provedorAtivo, provedorPorNome } from "@/lib/bank";
 import { FakeProvider } from "@/lib/bank/fake";
 import { desconectar, listarConexoes, registrarItem, sincronizarConexao } from "@/lib/dados/conexoes";
 import { aplicarRegrasSemCategoria, criarRegra, excluirRegra } from "@/lib/dados/regras";
-import { desfazerTransferencia, marcarComoTransferencia } from "@/lib/dados/transferencias";
+import { desfazerTransferencia, marcarComoTransferencia, vincularReembolso } from "@/lib/dados/transferencias";
 import { definirFaixas } from "@/lib/dados/credito";
 import { definirMeta } from "@/lib/dados/metas";
 import { aportar, arquivarObjetivo, atualizarObjetivo, criarObjetivo, excluirAporte, excluirObjetivo } from "@/lib/dados/objetivos";
@@ -466,6 +466,12 @@ export async function marcarTransferenciaAcao(_: Estado, fd: FormData) {
     (uid) => (eh === "sim" ? marcarComoTransferencia(db, uid, tid) : desfazerTransferencia(db, uid, tid)),
     eh === "sim" ? "Marcado como transferência: não conta mais como receita/despesa." : "Desfeito: voltou a contar como receita/despesa.",
   );
+}
+
+export async function vincularReembolsoAcao(_: Estado, fd: FormData) {
+  const p = z.object({ id, outro: id }).safeParse(Object.fromEntries(fd));
+  if (!p.success) return { erro: msg(p.error) };
+  return rodar((uid) => vincularReembolso(db, uid, p.data.id, p.data.outro), "Vinculados: o gasto e o reembolso não contam mais como despesa/receita.");
 }
 
 export async function categorizarLote(_: Estado, fd: FormData) {

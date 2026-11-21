@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { categorizarLote, editarLancamento, marcarTransferenciaAcao, removerLancamento } from "@/app/acoes";
+import { categorizarLote, editarLancamento, marcarTransferenciaAcao, removerLancamento, vincularReembolsoAcao } from "@/app/acoes";
+import { sugerirReembolsos } from "@/lib/calculos/transferencias";
 import { botao, botaoPerigo, botaoSecundario, campo, cartao, link, rotulo, titulo } from "@/components/estilos";
 import { Enviar, Form } from "@/components/form";
 import { ondeDe, SelectCategoria, SelectConta, SelectOnde, Tipo, Valor, Vazio } from "@/components/ui";
@@ -114,7 +115,7 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                         {nomeConta.get((t.contaId ?? t.cartaoId)!)}
                         {t.data > dia && " · futuro"}
                         {t.origem === "open_finance" && " · 🔗 do banco"}
-                        {t.transferenciaId && " · ↔ transferência"}
+                        {t.transferenciaId && (t.reembolso ? " · ↩ reembolso vinculado" : " · ↔ transferência")}
                       </span>
                     </span>
                     <Valor centavos={t.valorCentavos} className="font-semibold" />
@@ -123,12 +124,14 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                   {t.transferenciaId ? (
                     <div className="mt-3 flex flex-col gap-2 border-t border-zinc-200 pt-3 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
                       <p>
-                        ↔ Transferência entre suas contas (ou pagamento de fatura): só move dinheiro, não conta como receita nem despesa.
+                        {t.reembolso
+                          ? "↩ Gasto e reembolso vinculados: um anula o outro, nenhum conta como despesa ou receita."
+                          : "↔ Transferência entre suas contas (ou pagamento de fatura): só move dinheiro, não conta como receita nem despesa."}
                       </p>
                       <Form action={marcarTransferenciaAcao}>
                         <input type="hidden" name="id" value={t.id} />
                         <input type="hidden" name="eh" value="nao" />
-                        <Enviar className={botaoSecundario}>Não é transferência</Enviar>
+                        <Enviar className={botaoSecundario}>{t.reembolso ? "Desvincular" : "Não é transferência"}</Enviar>
                       </Form>
                     </div>
                   ) : t.origem === "open_finance" ? (
@@ -185,6 +188,25 @@ export default async function Lancamentos({ searchParams }: { searchParams: Prom
                     </label>
                     <Enviar>Salvar alterações</Enviar>
                   </Form>
+                  )}
+                  {!t.transferenciaId && sugerirReembolsos(t, lista).length > 0 && (
+                    <div className="mt-3 flex flex-col gap-1 border-t border-zinc-200 pt-2 text-sm dark:border-zinc-800">
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                        ↩ Vincular {t.valorCentavos < 0 ? "ao reembolso" : "ao gasto que este valor reembolsa"} (ex.: comprou para alguém que devolveu):
+                      </p>
+                      {sugerirReembolsos(t, lista).map((s) => (
+                        <Form key={s.id} action={vincularReembolsoAcao}>
+                          <input type="hidden" name="id" value={t.id} />
+                          <input type="hidden" name="outro" value={s.id} />
+                          <Enviar className={`${botaoSecundario} w-full justify-between gap-2 text-left`}>
+                            <span className="truncate">
+                              {formatarData(s.data)} · {s.descricao || "(sem descrição)"}
+                            </span>
+                            <Valor centavos={s.valorCentavos} />
+                          </Enviar>
+                        </Form>
+                      ))}
+                    </div>
                   )}
                   {!t.transferenciaId && (
                     <Form action={marcarTransferenciaAcao} className="mt-2">

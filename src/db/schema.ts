@@ -230,6 +230,9 @@ export const transacao = pgTable(
     transferenciaId: uuid(),
     // o usuário disse "não é transferência": a detecção automática não pareia mais este lançamento
     transferenciaRecusada: boolean().notNull().default(false),
+    // par vinculado pelo usuário como gasto + reembolso (ex.: comprou para um amigo, que devolveu): usa o mesmo
+    // transferencia_id para sair de receitas/despesas; este campo só muda o rótulo
+    reembolso: boolean().notNull().default(false),
     data: date().notNull(),
     valorCentavos: centavos().notNull(), // negativo = saída
     descricao: text().notNull().default(""),

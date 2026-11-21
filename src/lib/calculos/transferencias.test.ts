@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parearTransferencias, type Candidato } from "./transferencias";
+import { parearTransferencias, sugerirReembolsos, type Candidato } from "./transferencias";
 
 const l = (id: string, data: string, valorCentavos: number, onde: { contaId?: string; cartaoId?: string }): Candidato => ({
   id,
@@ -31,5 +31,19 @@ describe("pareamento de transferências", () => {
   });
   it("cartão não é origem de transferência (compra de mesmo valor que um Pix recebido não pareia)", () => {
     expect(parearTransferencias([l("compra", "2026-11-01", -5000, { cartaoId: "nu" }), l("pix", "2026-11-01", 5000, { contaId: "inter" })])).toEqual([]);
+  });
+});
+
+describe("sugestões de reembolso", () => {
+  const t = (id: string, data: string, valorCentavos: number, transferenciaId: string | null = null) => ({ id, data, valorCentavos, transferenciaId });
+  it("caso real: Pagamento Microsoft -99,00 e Pix recebido +99,99 no mesmo dia", () => {
+    const gasto = t("ms", "2026-11-01", -9900);
+    const todos = [gasto, t("pix", "2026-11-01", 9999), t("salario", "2026-11-05", 500000), t("outro-gasto", "2026-11-01", -9999)];
+    expect(sugerirReembolsos(gasto, todos).map((s) => s.id)).toEqual(["pix"]);
+    expect(sugerirReembolsos(todos[1]!, todos).map((s) => s.id)).toEqual(["outro-gasto", "ms"]); // mais parecido primeiro
+  });
+  it("fora de 20% de diferença, de 30 dias ou já vinculado: não sugere", () => {
+    const gasto = t("g", "2026-11-01", -10000);
+    expect(sugerirReembolsos(gasto, [gasto, t("a", "2026-11-01", 12100), t("b", "2026-12-15", 10000), t("c", "2026-11-02", 10000, "x")])).toEqual([]);
   });
 });

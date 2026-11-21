@@ -4,6 +4,29 @@ import { somarDias } from "./datas";
 
 export const JANELA_DIAS = 3;
 
+/**
+ * Sugestões de reembolso para um lançamento: sinal oposto, valor até 20% diferente, até 30 dias de distância,
+ * mais parecidos primeiro. Só sugere; quem vincula é o usuário (valor parecido sozinho não prova nada).
+ */
+export function sugerirReembolsos<T extends { id: string; data: string; valorCentavos: number; transferenciaId?: string | null }>(alvo: T, todos: T[], max = 3) {
+  const dias = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
+  return todos
+    .filter(
+      (l) =>
+        l.id !== alvo.id &&
+        !l.transferenciaId &&
+        Math.sign(l.valorCentavos) === -Math.sign(alvo.valorCentavos) &&
+        Math.abs(Math.abs(l.valorCentavos) - Math.abs(alvo.valorCentavos)) <= Math.abs(alvo.valorCentavos) * 0.2 &&
+        dias(l.data, alvo.data) <= 30,
+    )
+    .sort(
+      (a, b) =>
+        Math.abs(Math.abs(a.valorCentavos) - Math.abs(alvo.valorCentavos)) - Math.abs(Math.abs(b.valorCentavos) - Math.abs(alvo.valorCentavos)) ||
+        dias(a.data, alvo.data) - dias(b.data, alvo.data),
+    )
+    .slice(0, max);
+}
+
 export type Candidato = { id: string; data: string; valorCentavos: number; contaId: string | null; cartaoId: string | null };
 
 /**
